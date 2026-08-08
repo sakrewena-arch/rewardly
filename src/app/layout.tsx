@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/providers/Providers";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "Rewardly - Plateforme de tâches rémunérées",
@@ -49,6 +50,18 @@ export default function RootLayout({
       </head>
       <body className="bg-[#F7F7F8] dark:bg-[#090909] text-[#111111] dark:text-white antialiased">
         <Providers>{children}</Providers>
+        {/* Enregistrement du Service Worker PWA */}
+        <Script id="register-sw" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                  console.log('SW registration failed:', err);
+                });
+              });
+            }
+          `}
+        </Script>
       </body>
     </html>
   );

@@ -4,14 +4,17 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, Megaphone, Coins, CheckCircle, FileText, Shield, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
 
 const STORAGE_KEY = "rewardly_welcome_accepted";
 
 export default function WelcomePopup() {
   const router = useRouter();
+  const { install, isInstalled } = usePWAInstall();
   const [show, setShow] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [step, setStep] = useState<"accept" | "options">("accept");
+  const [installMsg, setInstallMsg] = useState<string | null>(null);
 
   useEffect(() => {
     // Afficher le popup UNIQUEMENT à la première visite
@@ -161,9 +164,22 @@ export default function WelcomePopup() {
               <div className="p-6 space-y-3">
                 <h2 className="font-semibold text-center mb-2">Que voulez-vous faire ?</h2>
 
-                {/* Bouton 1 - Télécharger l'app */}
+                {/* Bouton 1 - Télécharger l'app (installation directe) */}
                 <button
-                  onClick={() => router.push("/")}
+                  onClick={async () => {
+                    if (isInstalled) {
+                      setInstallMsg("L'application est déjà installée sur votre appareil ! ✅");
+                      return;
+                    }
+                    const result = await install();
+                    if (result.installed) {
+                      setInstallMsg("Application installée avec succès ! 🎉");
+                    } else if (result.needsIOSInstructions) {
+                      setInstallMsg("Sur iPhone/iPad : appuyez sur Partager → 'Sur l'écran d'accueil'");
+                    } else {
+                      setInstallMsg("Cliquez sur l'icône d'installation dans la barre d'adresse de votre navigateur.");
+                    }
+                  }}
                   className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-purple-200 dark:border-purple-500/20 bg-purple-50 dark:bg-purple-500/10 hover:border-purple-500 transition-all text-left"
                 >
                   <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center flex-shrink-0">
@@ -174,6 +190,11 @@ export default function WelcomePopup() {
                     <p className="text-xs text-[#8A8A8A] mt-0.5">Android • iOS • Windows</p>
                   </div>
                 </button>
+                {installMsg && (
+                  <p className="text-xs text-purple-600 bg-purple-50 dark:bg-purple-500/10 p-2 rounded-lg text-center">
+                    {installMsg}
+                  </p>
+                )}
 
                 {/* Bouton 2 - Nous contacter pour publicités */}
                 <button

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Mail, Phone, Calendar, Wallet, TrendingUp, Gift, ChevronRight, LogOut, Moon, Sun, Share2, Shield, Settings, Gift as GiftIcon, Check, AlertCircle, Megaphone } from "lucide-react";
+import { Mail, Phone, Calendar, Wallet, TrendingUp, Gift, ChevronRight, LogOut, Moon, Sun, Share2, Shield, Settings, Gift as GiftIcon, Check, AlertCircle, Megaphone, Download, Headphones } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useWallet } from "@/hooks/useWallet";
@@ -20,6 +20,8 @@ const menuItems = [
   { icon: Share2, label: "Parrainage", href: "/referral" },
   { icon: Shield, label: "Sécurité", href: "/security" },
   { icon: Megaphone, label: "Nos services", href: "/services" },
+  { icon: Download, label: "Télécharger l'application", href: "/download" },
+  { icon: Headphones, label: "Nous contacter", href: "/contact" },
 ];
 
 export default function ProfilePage() {
