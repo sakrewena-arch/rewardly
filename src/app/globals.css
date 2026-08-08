@@ -1,26 +1,102 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: #F7F7F8;
+  --color-foreground: #111111;
+  --color-card: #FFFFFF;
+  --color-card-dark: #161616;
+  --color-primary: #9D3FE7;
+  --color-primary-gradient-from: #A93EF3;
+  --color-primary-gradient-to: #8E36E5;
+  --color-yellow: #F7CB57;
+  --color-secondary-text: #8A8A8A;
+  --color-dark-bg: #090909;
+  --color-dark-card: #161616;
+  --color-dark-text: #FFFFFF;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-gray-100 dark:border-gray-800;
+  }
+  
+  body {
+    @apply bg-[#F7F7F8] dark:bg-[#090909] text-[#111111] dark:text-white;
+    font-family: var(--font-sans);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-200 dark:bg-gray-700 rounded-full;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .card-gradient {
+    background: linear-gradient(135deg, #A93EF3 0%, #8E36E5 100%);
+  }
+  
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* ============================================================
+     RESPONSIVITÉ POUR TRÈS PETITS ÉCRANS (< 380px)
+     ============================================================ */
+  /* Réduit les paddings/espaces sur les téléphones très étroits */
+  @media (max-width: 380px) {
+    .px-responsive {
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+    .p-responsive {
+      padding: 0.75rem;
+    }
+    .gap-responsive {
+      gap: 0.5rem;
+    }
+    .text-responsive-sm {
+      font-size: 0.75rem;
+    }
+    .text-responsive-xs {
+      font-size: 0.65rem;
+    }
+  }
+
+  /* Empêche le débordement horizontal sur tous les écrans */
+  @media (max-width: 640px) {
+    .overflow-guard {
+      overflow-x: hidden;
+      max-width: 100vw;
+    }
+  }
+
+  /* Grilles adaptatives : 3 colonnes compactes sur mobile, 2 sur très petit */
+  .grid-stats {
+    @apply grid grid-cols-3 gap-2;
+  }
+  @media (max-width: 380px) {
+    .grid-stats {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.4rem;
+    }
+  }
+
+  /* Empêche le débordement des textes longs dans les flex */
+  .truncate-responsive {
+    @apply truncate;
+    min-width: 0;
+  }
+}
+
+/* Smooth dark mode transition */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
