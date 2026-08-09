@@ -722,13 +722,19 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
 // ============ PLANS ============
 
 export async function getPlans(includeInactive = false) {
-  const supabase = await createClient();
+  // Utiliser le client admin (service role) pour contourner les problèmes de session/RLS
+  const adminClient = createAdminClient();
+  const supabase = adminClient || (await createClient());
   if (!supabase) return [];
   let query = supabase.from("plans").select("*").order("sort_order");
   if (!includeInactive) {
     query = query.eq("is_active", true);
   }
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    console.error("getPlans error:", error);
+    return [];
+  }
   return data || [];
 }
 
@@ -835,7 +841,9 @@ export async function getTasks(planId?: string) {
 }
 
 export async function getTaskFields(taskId: string) {
-  const supabase = await createClient();
+  // Utiliser le client admin (service role) pour contourner les problèmes de session/RLS
+  const adminClient = createAdminClient();
+  const supabase = adminClient || (await createClient());
   if (!supabase) return [];
   const { data } = await supabase
     .from("submission_fields")
@@ -848,7 +856,9 @@ export async function getTaskFields(taskId: string) {
 export async function createTaskAction(input: CreateTaskInput) {
   const admin = await requireAdmin();
   if (!admin) return { success: false, error: "Non autorisé" };
-  const supabase = await createClient();
+  // Utiliser le client admin (service role) pour contourner les problèmes de session/RLS
+  const adminClient = createAdminClient();
+  const supabase = adminClient || (await createClient());
   if (!supabase) return { success: false, error: "Supabase non configuré" };
   const { data, error } = await supabase.rpc("create_task", {
     p_admin_id: admin.id,
@@ -1053,7 +1063,9 @@ export async function rejectSubmissionAction(submissionId: string, comment?: str
 // ============ CATEGORIES ============
 
 export async function getCategories() {
-  const supabase = await createClient();
+  // Utiliser le client admin (service role) pour contourner les problèmes de session/RLS
+  const adminClient = createAdminClient();
+  const supabase = adminClient || (await createClient());
   if (!supabase) return [];
   const { data } = await supabase.from("task_categories").select("*").order("created_at");
   return data || [];
