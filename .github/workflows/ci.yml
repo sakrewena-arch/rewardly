@@ -81,14 +81,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: team_f7QPF4mDer9631pHkjyAiuu6
-          vercel-project-id: prj_SPhCOwC5m5LUBUasnmBQ4hdHWYO8
-          vercel-args: "--prod"
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Vercel (CLI latest)
+        run: npx vercel@latest --prod --yes --token ${{ secrets.VERCEL_TOKEN }}
         env:
+          VERCEL_ORG_ID: team_f7QPF4mDer9631pHkjyAiuu6
+          VERCEL_PROJECT_ID: prj_SPhCOwC5m5LUBUasnmBQ4hdHWYO8
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
