@@ -978,12 +978,18 @@ export async function updateTaskAction(input: {
 export async function deleteTaskAction(taskId: string) {
   const admin = await requireAdmin();
   if (!admin) return { success: false, error: "Non autorisé" };
-  const supabase = await createClient();
+  // Utiliser le client admin (service role) pour contourner les problèmes de session/RLS
+  const adminClient = createAdminClient();
+  const supabase = adminClient || (await createClient());
   if (!supabase) return { success: false, error: "Supabase non configuré" };
-  const { data } = await supabase.rpc("delete_task", {
+  const { data, error } = await supabase.rpc("delete_task", {
     p_admin_id: admin.id,
     p_task_id: taskId,
   });
+  if (error) {
+    console.error("deleteTaskAction error:", error);
+    return { success: false, error: error.message };
+  }
   revalidatePath("/admin/tasks");
   return data;
 }
