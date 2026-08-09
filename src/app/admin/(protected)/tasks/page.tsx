@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Clock, Link2, Type, Hash, Image, Video, MessageCircle, Send, Target, Share2, ChevronDown, Filter } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Clock, Link2, Type, Hash, Image, Video, MessageCircle, Send, Target, Share2, ChevronDown, Filter, Loader2, AlertTriangle, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -305,56 +305,94 @@ export default function AdminTasksPage() {
     await loadData();
   };
 
-  const handleApprove = async (submissionId: string) => {
-    // Update local submission status (so history/dashboard show "validé")
-    updateLocalSubmissionStatus(submissionId, "approved");
+  // ===== POPUP DE CONFIRMATION : approbation / refus d'une soumission =====
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "approve" | "reject";
+    submissionId: string;
+    taskTitle: string;
+    amount: number;
+    userLabel: string;
+  } | null>(null);
+  const [rejectComment, setRejectComment] = useState("");
+  const [acting, setActing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-    // If this is a LOCAL submission (test mode, id starts with "sub-"),
-    // the RPC won't find it in DB → credit the wallet locally
-    if (submissionId.startsWith("sub-")) {
-      const local = getLocalSubmissions();
-      const sub = local.find((s: any) => s.id === submissionId);
-      if (sub && sub.task?.amount) {
-        // Credit the local wallet (balance + total_earnings)
-        const storedWallet = localStorage.getItem("rewardly_wallet");
-        if (storedWallet) {
-          try {
-            const wallet = JSON.parse(storedWallet);
-            wallet.balance = (wallet.balance || 0) + sub.task.amount;
-            wallet.total_earnings = (wallet.total_earnings || 0) + sub.task.amount;
-            wallet.updated_at = new Date().toISOString();
-            localStorage.setItem("rewardly_wallet", JSON.stringify(wallet));
-          } catch (e) {}
-        }
-        // Add a completed transaction
-        const storedTx = localStorage.getItem("rewardly_transactions");
-        const txs = storedTx ? JSON.parse(storedTx) : [];
-        const newTx = {
-          id: "tx-" + Date.now(),
-          user_id: "local-user",
-          wallet_id: "local-wallet",
-          amount: sub.task.amount,
-          type: "reward",
-          description: `Tâche validée : ${sub.task.title || "Tâche"}`,
-          reference: null,
-          status: "completed",
-          created_at: new Date().toISOString(),
-        };
-        localStorage.setItem("rewardly_transactions", JSON.stringify([newTx, ...txs]));
-      }
-    } else {
-      // DB submission → use the RPC to credit
-      await approveSubmissionAction(submissionId);
+  // Créditer le wallet LOCAL (mode test) + enregistrer une transaction
+  const creditLocalWallet = (submissionId: string) => {
+    const local = getLocalSubmissions();
+    const sub = local.find((s: any) => s.id === submissionId);
+    if (!sub || !sub.task?.amount) return;
+    // Credit the local wallet (balance + total_earnings)
+    const storedWallet = localStorage.getItem("rewardly_wallet");
+    if (storedWallet) {
+      try {
+        const wallet = JSON.parse(storedWallet);
+        wallet.balance = (wallet.balance || 0) + sub.task.amount;
+        wallet.total_earnings = (wallet.total_earnings || 0) + sub.task.amount;
+        wallet.updated_at = new Date().toISOString();
+        localStorage.setItem("rewardly_wallet", JSON.stringify(wallet));
+      } catch (e) {}
     }
-    loadSubmissions();
+    // Add a completed transaction
+    const storedTx = localStorage.getItem("rewardly_transactions");
+    const txs = storedTx ? JSON.parse(storedTx) : [];
+    const newTx = {
+      id: "tx-" + Date.now(),
+      user_id: "local-user",
+      wallet_id: "local-wallet",
+      amount: sub.task.amount,
+      type: "reward",
+      description: `Tâche validée : ${sub.task.title || "Tâche"}`,
+      reference: null,
+      status: "completed",
+      created_at: new Date().toISOString(),
+    };
+    localStorage.setItem("rewardly_transactions", JSON.stringify([newTx, ...txs]));
   };
 
-  const handleReject = async (submissionId: string) => {
-    const comment = prompt("Motif du refus :");
-    // Update local submission status (so history/dashboard show "rejeté")
-    updateLocalSubmissionStatus(submissionId, "rejected", comment || undefined);
-    await rejectSubmissionAction(submissionId, comment || undefined);
-    loadSubmissions();
+  // Exécuter l'action confirmée dans la popup
+  const handleConfirmAction = async () => {
+    if (!confirmAction || acting) return;
+    const { type, submissionId } = confirmAction;
+    setActing(true);
+    setActionError(null);
+    try {
+      if (type === "approve") {
+        // Soumission locale (mode test) → crédit du wallet local
+        if (submissionId.startsWith("sub-")) {
+          updateLocalSubmissionStatus(submissionId, "approved");
+          creditLocalWallet(submissionId);
+        } else {
+          // Soumission en base → RPC approve_submission (approbation + crédit auto)
+          const result = await approveSubmissionAction(submissionId);
+          if (result && (result as any).success === false) {
+            throw new Error((result as any).error || "Erreur lors de l'approbation");
+          }
+        }
+        setFeedback("Soumission approuvée et créditée ✅");
+      } else {
+        const comment = rejectComment.trim();
+        if (submissionId.startsWith("sub-")) {
+          updateLocalSubmissionStatus(submissionId, "rejected", comment || undefined);
+        } else {
+          // Soumission en base → RPC reject_submission
+          const result = await rejectSubmissionAction(submissionId, comment || undefined);
+          if (result && (result as any).success === false) {
+            throw new Error((result as any).error || "Erreur lors du refus");
+          }
+        }
+        setFeedback("Soumission refusée");
+      }
+      // Fermer la popup et rafraîchir la liste des validations
+      setConfirmAction(null);
+      setRejectComment("");
+      await loadSubmissions();
+    } catch (e: any) {
+      console.error("Confirm action error:", e);
+      setActionError(e?.message || "Une erreur est survenue");
+    } finally {
+      setActing(false);
+    }
   };
 
   return (
@@ -712,10 +750,35 @@ export default function AdminTasksPage() {
                           <Button size="sm" variant="outline" onClick={() => setExpandedValidation(expandedValidation === sub.id ? null : sub.id)}>
                             {expandedValidation === sub.id ? "Masquer" : "Détail"}
                           </Button>
-                          <Button size="sm" variant="default" className="bg-green-500 hover:bg-green-600" onClick={() => handleApprove(sub.id)}>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="bg-green-500 hover:bg-green-600"
+                            onClick={() =>
+                              setConfirmAction({
+                                type: "approve",
+                                submissionId: sub.id,
+                                taskTitle: sub.tasks?.title || "Tâche",
+                                amount: sub.tasks?.amount || 0,
+                                userLabel: sub.profiles?.full_name || sub.profiles?.username || "Utilisateur",
+                              })
+                            }
+                          >
                             <CheckCircle className="w-3 h-3 mr-1" /> Approuver & Créditer
                           </Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleReject(sub.id)}>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() =>
+                              setConfirmAction({
+                                type: "reject",
+                                submissionId: sub.id,
+                                taskTitle: sub.tasks?.title || "Tâche",
+                                amount: sub.tasks?.amount || 0,
+                                userLabel: sub.profiles?.full_name || sub.profiles?.username || "Utilisateur",
+                              })
+                            }
+                          >
                             <XCircle className="w-3 h-3 mr-1" /> Refuser
                           </Button>
                         </div>
@@ -890,6 +953,160 @@ export default function AdminTasksPage() {
           </>
         )}
       </div>
+{/* ===== POPUP DE CONFIRMATION : approuver / refuser une validation ===== */}
+      {confirmAction && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          onClick={() => {
+            if (!acting) {
+              setConfirmAction(null);
+              setRejectComment("");
+              setActionError(null);
+            }
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 350, damping: 26 }}
+            className="w-full max-w-md bg-white dark:bg-[#161616] rounded-2xl shadow-2xl overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* En-tête coloré selon le type d'action */}
+            <div
+              className={`p-5 flex items-start gap-3 border-b ${
+                confirmAction.type === "approve"
+                  ? "bg-green-500/10 border-green-200 dark:border-green-500/20"
+                  : "bg-red-500/10 border-red-200 dark:border-red-500/20"
+              }`}
+            >
+              <div
+                className={`w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  confirmAction.type === "approve" ? "bg-green-500 text-white" : "bg-red-500 text-white"
+                }`}
+              >
+                {confirmAction.type === "approve" ? (
+                  <CheckCircle className="w-6 h-6" />
+                ) : (
+                  <XCircle className="w-6 h-6" />
+                )}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-lg">
+                  {confirmAction.type === "approve" ? "Approuver & créditer ?" : "Refuser la soumission ?"}
+                </h3>
+                <p className="text-sm text-[#8A8A8A] mt-0.5">
+                  {confirmAction.type === "approve"
+                    ? "L'utilisateur sera crédité automatiquement."
+                    : "La soumission sera marquée comme refusée."}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (!acting) {
+                    setConfirmAction(null);
+                    setRejectComment("");
+                    setActionError(null);
+                  }
+                }}
+                aria-label="Fermer"
+                className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center hover:bg-black/10 dark:hover:bg-white/20 transition-colors flex-shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Récapitulatif */}
+              <div className="rounded-xl bg-gray-50 dark:bg-white/5 p-4 space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#8A8A8A]">Tâche</span>
+                  <span className="font-medium text-right">{confirmAction.taskTitle}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#8A8A8A]">Utilisateur</span>
+                  <span className="font-medium">{confirmAction.userLabel}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#8A8A8A]">Récompense</span>
+                  <span className={`font-bold ${confirmAction.type === "approve" ? "text-green-500" : "text-[#111111] dark:text-white"}`}>
+                    {formatCurrency(confirmAction.amount)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Motif du refus (uniquement lors d'un refus) */}
+              {confirmAction.type === "reject" && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Motif du refus <span className="text-[#8A8A8A] font-normal">(optionnel)</span>
+                  </label>
+                  <textarea
+                    value={rejectComment}
+                    onChange={(e) => setRejectComment(e.target.value)}
+                    placeholder="Ex : preuve incomplète, lien invalide..."
+                    rows={3}
+                    disabled={acting}
+                    className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400/60"
+                  />
+                </div>
+              )}
+
+              {/* Erreur éventuelle */}
+              {actionError && (
+                <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl p-3">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{actionError}</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-1">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    if (!acting) {
+                      setConfirmAction(null);
+                      setRejectComment("");
+                      setActionError(null);
+                    }
+                  }}
+                  disabled={acting}
+                >
+                  Annuler
+                </Button>
+                {confirmAction.type === "approve" ? (
+                  <Button
+                    className="flex-1 bg-green-500 hover:bg-green-600"
+                    onClick={handleConfirmAction}
+                    disabled={acting}
+                  >
+                    {acting ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Crédit en cours...</>
+                    ) : (
+                      <><CheckCircle className="w-4 h-4 mr-2" /> Confirmer & Créditer</>
+                    )}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    onClick={handleConfirmAction}
+                    disabled={acting}
+                  >
+                    {acting ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Refus en cours...</>
+                    ) : (
+                      <><XCircle className="w-4 h-4 mr-2" /> Confirmer le refus</>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1041,13 +1041,24 @@ export async function getSubmissions(status?: string) {
 export async function approveSubmissionAction(submissionId: string, comment?: string) {
   const admin = await requireAdmin();
   if (!admin) return { success: false, error: "Non autorisé" };
-  const supabase = await createClient();
+
+  // Client admin (service role) : garantit l'exécution de la RPC même sans
+  // session utilisateur active côté admin (session admin = cookie séparé).
+  const adminClient = createAdminClient();
+  const supabase = adminClient || (await createClient());
   if (!supabase) return { success: false, error: "Supabase non configuré" };
-  const { data } = await supabase.rpc("approve_submission", {
+
+  const { data, error } = await supabase.rpc("approve_submission", {
     p_submission_id: submissionId,
     p_admin_id: admin.id,
     p_comment: comment || null,
   });
+
+  if (error) {
+    console.error("approve_submission RPC error:", error.message);
+    return { success: false, error: error.message };
+  }
+
   revalidatePath("/admin/tasks");
   return data;
 }
@@ -1055,13 +1066,23 @@ export async function approveSubmissionAction(submissionId: string, comment?: st
 export async function rejectSubmissionAction(submissionId: string, comment?: string) {
   const admin = await requireAdmin();
   if (!admin) return { success: false, error: "Non autorisé" };
-  const supabase = await createClient();
+
+  // Client admin (service role) : fiable pour les RPC admin
+  const adminClient = createAdminClient();
+  const supabase = adminClient || (await createClient());
   if (!supabase) return { success: false, error: "Supabase non configuré" };
-  const { data } = await supabase.rpc("reject_submission", {
+
+  const { data, error } = await supabase.rpc("reject_submission", {
     p_submission_id: submissionId,
     p_admin_id: admin.id,
     p_comment: comment || null,
   });
+
+  if (error) {
+    console.error("reject_submission RPC error:", error.message);
+    return { success: false, error: error.message };
+  }
+
   revalidatePath("/admin/tasks");
   return data;
 }

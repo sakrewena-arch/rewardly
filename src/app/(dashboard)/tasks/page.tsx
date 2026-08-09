@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { submitTaskAction } from "@/actions/user-actions";
 import { getTaskFields } from "@/actions/admin-actions";
 import { createClient } from "@/lib/supabase/client";
+import { useNav } from "@/context/NavContext";
 
 const availablePlans = [
   { name: "Bronze", slug: "bronze", price: 5000, tasks: "1 tâche/jour", profitability: "10% - 20%", badge: "Bronze", color: "from-amber-700 to-amber-600", badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-500/20" },
@@ -102,6 +103,19 @@ export default function TasksPage() {
   // Video completion state
   const [videoWatched, setVideoWatched] = useState<Record<string, boolean>>({});
   const [videoTaskId, setVideoTaskId] = useState<string | null>(null);
+
+  // 🧭 Masquer la barre de navigation pendant qu'un popup plein écran est ouvert
+  // (validation manuelle, partage) pour que rien ne soit masqué.
+  const shareModalOpen = Boolean(shareModal?.open);
+  const { hideNav, showNav } = useNav();
+
+  useEffect(() => {
+    if (showTaskModal || shareModalOpen) {
+      hideNav(true);
+    } else {
+      showNav();
+    }
+  }, [showTaskModal, shareModalOpen, hideNav, showNav]);
 
   // Parse [SHARE] info from task instructions
   const parseShareInfo = (task: any) => {
@@ -684,7 +698,7 @@ export default function TasksPage() {
 
       {/* Share Task Modal with progress */}
       {shareModal && shareModal.open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
@@ -871,7 +885,7 @@ export default function TasksPage() {
 
       {/* Task Submission Modal (manual validation) */}
       {showTaskModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
