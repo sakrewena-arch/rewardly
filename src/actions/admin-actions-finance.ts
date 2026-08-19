@@ -144,7 +144,7 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
       console.error("Payout error:", e);
       // Si le payout échoue (solde insuffisant, etc.) → approuver le retrait
       // et informer l'admin qu'il doit payer manuellement
-      const { data: approvedData } = await supabase.rpc("validate_withdrawal", {
+      await supabase.rpc("validate_withdrawal", {
         p_withdrawal_id: withdrawalId,
         p_admin_id: admin.id,
         p_status: "approved",

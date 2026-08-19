@@ -48,7 +48,6 @@ const BASE = [
   "",
   'import { createClient, createAdminClient } from "@/lib/supabase/server";',
 ];
-const WITH_REVALIDATE = [...BASE, 'import { revalidatePath } from "next/cache";', ""];
 const WITH_ADMIN = [...BASE, 'import { requireAdmin } from "./admin-actions-helpers";', 'import { revalidatePath } from "next/cache";', ""];
 const WITH_TYPES = [...WITH_ADMIN, 'import type { CreateTaskInput, TaskFieldInput } from "@/types/admin";', ""];
 

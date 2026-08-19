@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import globals from "globals";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -38,6 +39,28 @@ const eslintConfig = defineConfig([
     // Edge Functions utilisent Deno, pas ESLint du projet
     "supabase/functions/**",
   ]),
+  // Electron (desktop/) = app Node.js autonome, importe en require()
+  {
+    files: ["desktop/**/*.js"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "no-undef": "off",
+    },
+  },
+  // Scripts outillage (Node.js, pas bundlés avec l'app)
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
 ]);
 
 export default eslintConfig;

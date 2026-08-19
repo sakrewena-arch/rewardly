@@ -4,7 +4,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { requireAdmin } from "./admin-actions-helpers";
 import { revalidatePath } from "next/cache";
 
-import type { CreateTaskInput, TaskFieldInput } from "@/types/admin";
+import type { CreateTaskInput } from "@/types/admin";
 
 
 // ============ TASKS ============

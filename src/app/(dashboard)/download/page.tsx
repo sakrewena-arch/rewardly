@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
-import { getAppBaseUrl } from "@/lib/utils";
 
 interface ReleaseAsset {
   name: string;
