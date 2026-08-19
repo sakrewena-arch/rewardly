@@ -1,18 +1,52 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Download, Check, Share2 } from "lucide-react";
+import { ArrowLeft, Download, Check, Share2, Smartphone, Monitor, Apple, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { getAppBaseUrl } from "@/lib/utils";
+
+interface ReleaseAsset {
+  name: string;
+  size: number;
+  downloadUrl: string;
+}
+
+interface ReleasesData {
+  tag?: string;
+  name?: string | null;
+  publishedAt?: string | null;
+  android: ReleaseAsset[];
+  windows: ReleaseAsset[];
+  linux: ReleaseAsset[];
+  macos: ReleaseAsset[];
+  error?: string;
+}
+
+function formatSize(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return mb > 1024 ? `${(mb / 1024).toFixed(1)} Go` : `${mb.toFixed(0)} Mo`;
+}
 
 export default function DownloadPage() {
   const router = useRouter();
   const { install, isInstalled } = usePWAInstall();
   const [copied, setCopied] = useState(false);
   const [installMsg, setInstallMsg] = useState<string | null>(null);
+  const [releases, setReleases] = useState<ReleasesData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Charger la dernière release native (APK / EXE / AppImage…)
+  useEffect(() => {
+    fetch("/api/releases")
+      .then((res) => res.json())
+      .then((data) => setReleases(data))
+      .catch(() => setReleases({ android: [], windows: [], linux: [], macos: [], error: "Impossible de charger les installateurs" }))
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleInstallPWA = async () => {
     if (isInstalled) {
@@ -70,6 +104,37 @@ export default function DownloadPage() {
             </p>
           )}
         </div>
+      </motion.div>
+
+      {/* ============ APPLICATIONS NATIVES (téléchargement direct) ============ */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Card>
+          <CardContent className="p-5 space-y-4">
+            <div>
+              <h2 className="font-semibold flex items-center gap-2"><Download className="w-4 h-4 text-purple-500" /> Applications natives</h2>
+              <p className="text-xs text-[#8A8A8A] mt-1">
+                Téléchargez l'application directement depuis ce site, sans boutique.
+                {releases?.tag ? ` Version : ${releases.tag}` : ""}
+              </p>
+            </div>
+
+            {loading && (
+              <div className="flex items-center gap-2 text-sm text-[#8A8A8A]">
+                <Loader2 className="w-4 h-4 animate-spin" /> Chargement des installateurs…
+              </div>
+            )}
+
+            {!loading && releases?.error && (
+              <p className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+                <AlertCircle className="w-4 h-4" /> {releases.error} — créez un tag Git (ex. v0.1.0) pour générer les installateurs.
+              </p>
+            )}
+
+            {!loading && releases && !releases.error && (
+              <DownloadGrid releases={releases} />
+            )}
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Instructions par plateforme */}
@@ -146,5 +211,109 @@ export default function DownloadPage() {
         </Card>
       </motion.div>
     </div>
+  );
+}
+
+// ============================================================
+// Grille des téléchargements natifs (Android / Windows / Linux / iOS)
+// ============================================================
+function DownloadGrid({ releases }: { releases: ReleasesData }) {
+  return (
+    <>
+      {/* Android */}
+      <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
+        <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+          <Smartphone className="w-5 h-5 text-green-600" />
+        </div>
+        <div className="flex-1">
+          <p className="font-medium text-sm">Android</p>
+          <p className="text-xs text-[#8A8A8A] mt-0.5">
+            Fichier APK à installer. Autorisez « Sources inconnues » si demandé.
+          </p>
+          {releases.android.length > 0 ? (
+            <a
+              href={releases.android[0].downloadUrl}
+              download
+              className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-green-600 text-white text-xs font-medium hover:bg-green-700"
+            >
+              <Download className="w-3.5 h-3.5" /> APK ({formatSize(releases.android[0].size)})
+            </a>
+          ) : (
+            <p className="text-xs text-amber-600 mt-1">Non publié</p>
+          )}
+        </div>
+      </div>
+
+      {/* Windows */}
+      <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
+        <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+          <Monitor className="w-5 h-5 text-sky-600" />
+        </div>
+        <div className="flex-1">
+          <p className="font-medium text-sm">Windows</p>
+          <p className="text-xs text-[#8A8A8A] mt-0.5">
+            Installateur (Setup) ou version portable.
+          </p>
+          {releases.windows.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {releases.windows.map((a) => (
+                <a
+                  key={a.name}
+                  href={a.downloadUrl}
+                  download
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-sky-600 text-white text-xs font-medium hover:bg-sky-700"
+                >
+                  <Download className="w-3.5 h-3.5" /> {a.name.toLowerCase().includes("setup") ? "Installateur" : "Portable"} ({formatSize(a.size)})
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-amber-600 mt-1">Non publié</p>
+          )}
+        </div>
+      </div>
+
+      {/* Linux */}
+      <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
+        <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+          <Monitor className="w-5 h-5 text-orange-600" />
+        </div>
+        <div className="flex-1">
+          <p className="font-medium text-sm">Linux</p>
+          <p className="text-xs text-[#8A8A8A] mt-0.5">
+            AppImage (universel) ou .deb (Debian/Ubuntu).
+          </p>
+          {releases.linux.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {releases.linux.map((a) => (
+                <a
+                  key={a.name}
+                  href={a.downloadUrl}
+                  download
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-orange-600 text-white text-xs font-medium hover:bg-orange-700"
+                >
+                  <Download className="w-3.5 h-3.5" /> {a.name.toLowerCase().includes("appimage") ? "AppImage" : "deb"} ({formatSize(a.size)})
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-amber-600 mt-1">Non publié</p>
+          )}
+        </div>
+      </div>
+
+      {/* iOS */}
+      <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
+        <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+          <Apple className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+        </div>
+        <div className="flex-1">
+          <p className="font-medium text-sm">iPhone / iPad</p>
+          <p className="text-xs text-[#8A8A8A] mt-0.5">
+            Apple n'autorise pas l'installation d'IPA hors App Store pour le grand public. Sur iOS, utilisez le bouton PWA « Ajouter à l'écran d'accueil » ci-dessus, ou installez via l'App Store / TestFlight.
+          </p>
+        </div>
+      </div>
+    </>
   );
 }
