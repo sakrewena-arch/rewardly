@@ -43,7 +43,7 @@ jobs:
           ./gradlew assembleDebug
 
       - name: Configure release signing (si secrets dispo)
-        if: ${{ secrets.ANDROID_KEYSTORE_PATH != '' }}
+        if: secrets.ANDROID_KEYSTORE_PATH != ''
         env:
           ANDROID_KEYSTORE_PATH: ${{ secrets.ANDROID_KEYSTORE_PATH }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -62,7 +62,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload APK (release)
-        if: ${{ secrets.ANDROID_KEYSTORE_PATH != '' }}
+        if: secrets.ANDROID_KEYSTORE_PATH != ''
         uses: actions/upload-artifact@v4
         with:
           name: rewardly-release-apk
