@@ -1,0 +1,74 @@
+name: Release Native
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-electron:
+    name: Electron (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win
+          - os: ubuntu-latest
+            args: --linux
+          - os: macos-latest
+            args: --mac
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --prefix desktop
+
+      - name: Synchroniser la version native
+        run: node scripts/sync-native-versions.mjs
+
+      - name: Build dist
+        run: npm run build:dist
+
+      - name: Build Electron
+        working-directory: desktop
+        run: npx electron-builder ${{ matrix.args }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.AppImage
+            desktop/release/*.deb
+            desktop/release/*.dmg
+          if-no-files-found: warn
+
+  release:
+    name: Publier GitHub Release
+    needs: build-electron
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Rewardly ${{ github.ref_name }}
+          tag_name: ${{ github.ref }}
+          draft: true
+          generate_release_notes: true
+          files: dist-artifacts/**

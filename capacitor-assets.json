@@ -1,0 +1,15 @@
+{
+  "assets": {
+    "icon": {
+      "src": "assets/icon-only.png",
+      "darkSrc": "assets/icon-dark.png",
+      "foregroundSrc": "assets/icon-foreground.png",
+      "backgroundSrc": "assets/icon-background.png",
+      "backgroundDarkSrc": "assets/icon-background-dark.png"
+    },
+    "splash": {
+      "src": "assets/splash.png",
+      "darkSrc": "assets/splash-dark.png"
+    }
+  }
+}

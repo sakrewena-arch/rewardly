@@ -43,6 +43,17 @@
 - **Tests:** Vitest
 - **Edge Functions:** Deno (Supabase)
 - **CI/CD:** GitHub Actions + Vercel
+- **Apps natives:** Capacitor (Android/iOS) + Electron (Windows/Linux/macOS)
+
+## 📱 Applications natives (Android / iOS / Windows / Linux)
+
+Rewardly peut être empaqueté en apps installables :
+
+- **Android** (`APK`/`AAB` → Play Store), **iOS** (`IPA` → App Store) : **Capacitor**
+- **Windows** (`exe` NSIS + portable), **Linux** (`AppImage`/`deb`), **macOS** (`dmg`) : **Electron**
+
+> ✅ **Guide complet & commandes : [WRAPPER_GUIDE.md](./WRAPPER_GUIDE.md)**
+> ⚠️ Pensez à configurer l'URL de production dans **`wrapper.config.mjs`**.
 
 ## 📋 Prérequis
 
@@ -50,6 +61,7 @@
 - npm
 - Compte Supabase (gratuit)
 - GitHub + Vercel (pour le déploiement)
+- JDK 17 + Android SDK (build APK) — déjà disponibles sur la machine de dev
 
 ## 🔧 Installation
 
@@ -232,7 +244,10 @@ rewardly/
 │       └── ci.yml              # CI/CD pipeline
 ├── src/
 │   ├── actions/                # Server Actions
-│   │   ├── admin-actions.ts    # Actions admin
+│   │   ├── admin-actions.ts    # Barrel admin (réexporte les modules ci-dessous)
+│   │   ├── admin-actions-*.ts  # Modules admin découpés par domaine
+│   │   │                       #   (helpers, analytics, users, finance, plans,
+│   │   │                       #    tasks, submissions, categories, services, settings)
 │   │   ├── admin-auth.ts       # Auth admin (cookie séparé)
 │   │   ├── auth-actions.ts     # Reset de mot de passe
 │   │   ├── settings-actions.ts # Paramètres système
@@ -247,10 +262,9 @@ rewardly/
 │   ├── context/                # AuthContext, ThemeContext
 │   ├── hooks/                  # useWallet, useTasks
 │   ├── lib/                    # Utilitaires
-│   │   ├── __tests__/          # Tests Vitest
-│   │   ├── rate-limit.ts       # Rate limiting
-│   │   ├── pagination.ts       # Pagination
-│   │   ├── storage.ts          # Supabase Storage
+│   │   ├── __tests__/          # Tests Vitest (utils, validations, wallet)
+│   │   ├── rate-limit.ts       # Rate limiting (routes API sensibles)
+│   │   ├── utils.ts            # formatCurrency, computeWithdrawableAmount, getAppBaseUrl…
 │   │   ├── validations.ts      # Schémas Zod
 │   │   └── supabase/           # Clients Supabase
 │   ├── providers/              # Providers
@@ -273,9 +287,20 @@ rewardly/
 - **Client Supabase admin** uniquement côté serveur
 - **Logs d'audit** pour toutes les actions admin
 - **Validation Zod** côté client et serveur
-- **Rate limiting** sur les Server Actions
+- **Rate limiting** sur les routes sensibles (`/api/feexpay/*`, `/api/admin/login`)
 - **Uploads** sécurisés vers Supabase Storage (bucket `proofs`)
 - **Reset de mot de passe** via Supabase Auth (email)
+
+> ⚠️ **IMPORTANT — Rotations de clés** : si vos anciennes clés Supabase ont été
+> exposées (ex: dans un `.env.example` committé), régénérez-les immédiatement dans
+> **Supabase Dashboard → Settings → API Keys** et mettez à jour votre hébergement.
+> Le `.env.example` du dépôt ne contient désormais que des **placeholders**.
+
+> 🧪 **Operations financières atomiques** : les dépôts (crédit) et retraits (débit)
+> passent par des RPC SQL `SECURITY DEFINER` (`credit_feeexpay_deposit`,
+> `request_withdrawal_feeexpay`) avec verrou de ligne `SELECT … FOR UPDATE`.
+> Le montant retirable est limité aux **gains** (jamais les dépôts ni le capital).
+> Migration requise : `supabase/migrations/00015_referral_atomic_wallet.sql`.
 
 ## 📄 License
 

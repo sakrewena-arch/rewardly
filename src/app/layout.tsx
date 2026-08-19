@@ -4,6 +4,9 @@ import { Providers } from "@/providers/Providers";
 import Script from "next/script";
 
 export const metadata: Metadata = {
+  // Base canonique : garantit que les liens OG/médias utilisent le vrai
+  // domaine en production (jamais localhost), cf. getAppBaseUrl().
+  metadataBase: new URL("https://rewardly.vercel.app"),
   title: "Rewardly - Plateforme de tâches rémunérées",
   description: "Gagnez de l'argent en accomplissant des tâches simples. Rejoignez Rewardly, la plateforme de micro-tâches rémunérées la plus fiable.",
   keywords: ["tâches rémunérées", "gagner de l'argent", "micro-tâches", "rewardly", "freelance"],

@@ -1,5 +1,8 @@
-// Rate limiting utility for Server Actions
-// Simple in-memory rate limiter (per IP)
+// Rate limiting utility for Route Handlers & Server Actions
+// Simple in-memory rate limiter (per IP / per utilisateur).
+// ⚠️ En environnement serverless (Vercel), le store est par instance :
+//    c'est une protection "best-effort", pas une barrière absolue.
+//    Il reste efficace contre les abus d'un même appelant.
 
 interface RateLimitEntry {
   count: number;
@@ -36,6 +39,18 @@ export function checkRateLimit(
 }
 
 /**
+ * Détermine une clé d'identification par IP pour le rate limiting.
+ * Gère les reverse proxies (Vercel/Cloudflare) via x-forwarded-for.
+ */
+export function getClientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return request.headers.get("x-real-ip") || "unknown";
+}
+
+/**
  * Nettoie les entrées expirées (appel périodique)
  */
 export function cleanupRateLimits() {
@@ -47,5 +62,6 @@ export function cleanupRateLimits() {
   }
 }
 
-// Cleanup every 5 minutes
+// Cleanup every 5 minutes (inactif pendant le test/typecheck : module exécuté
+// uniquement à l'import côté runtime).
 setInterval(cleanupRateLimits, 5 * 60 * 1000);

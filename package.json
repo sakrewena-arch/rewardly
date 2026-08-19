@@ -9,9 +9,27 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "wrap:icons": "node scripts/generate-app-icons.mjs && npx capacitor-assets generate --android --ios",
+    "build:dist": "node scripts/generate-dist.mjs",
+    "sync:version": "node scripts/sync-native-versions.mjs",
+    "wrap:sync": "npm run wrap:icons && npm run sync:version && npx cap sync",
+    "android": "npm run wrap:sync && npx cap open android",
+    "android:build": "npm run wrap:sync && cd android && gradlew.bat assembleDebug",
+    "ios": "npm run wrap:sync && npx cap open ios",
+    "desktop:install": "npm --prefix desktop install",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:build": "npm run desktop:install && npm --prefix desktop run build:all",
+    "desktop:build:win": "npm run desktop:install && npm --prefix desktop run build:win",
+    "desktop:build:linux": "npm run desktop:install && npm --prefix desktop run build:linux",
+    "desktop:build:mac": "npm run desktop:install && npm --prefix desktop run build:mac"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@hookform/resolvers": "^5.5.7",
     "@lottiefiles/dotlottie-react": "^0.19.12",
     "@lottiefiles/react-lottie-player": "^3.6.0",
@@ -34,6 +52,8 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

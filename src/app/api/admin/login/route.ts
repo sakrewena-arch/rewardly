@@ -1,5 +1,6 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export const ADMIN_SESSION_COOKIE = "admin_session";
 
@@ -16,6 +17,16 @@ export const ADMIN_SESSION_COOKIE = "admin_session";
  */
 export async function POST(request: Request) {
   try {
+    // Rate limit : max 10 tentatives de connexion admin / minute / IP
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`admin-login:${ip}`, 10, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Trop de tentatives. Réessayez dans ${rl.retryAfter}s.` },
+        { status: 429 }
+      );
+    }
+
     const { email, password } = await request.json();
 
     if (!email || !password) {

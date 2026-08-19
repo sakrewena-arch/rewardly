@@ -48,6 +48,48 @@ export function maskCardNumber(number: string): string {
   return `**** **** **** ${last4}`;
 }
 
+/**
+ * Retourne l'URL de base réelle de l'application.
+ * Côté client, on utilise window.location.origin → le lien affiche TOUJOURS
+ * le vrai domaine consulté (jamais "http://localhost:3000" en production,
+ * même si NEXT_PUBLIC_APP_URL a été mal configuré au build).
+ * Côté serveur, on retombe sur NEXT_PUBLIC_APP_URL.
+ */
+export function getAppBaseUrl(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  const configured = process.env.NEXT_PUBLIC_APP_URL;
+  if (configured && !/^https?:\/\/localhost(:\d+)?$/.test(configured)) {
+    return configured;
+  }
+  return configured || "https://rewardly.vercel.app";
+}
+
+/**
+ * Calcule le montant réellement retirable d'un utilisateur.
+ * Règle métier : SEULS LES GAINS (total_earnings) sont retirables —
+ * jamais les dépôts ni le capital investi.
+ *
+ * @param options - Deux opérandes réutilisées côté client et côté serveur.
+ *  - rawWithdrawable : gains bruts retirables (ex: RPC get_withdrawable_amount)
+ *  - pendingWithdrawals : somme des retraits en attente/approuvés (à déduire)
+ *  - servicePayments : total absolu des paiements de services (à déduire)
+ * @returns montant retirable, jamais négatif.
+ */
+export function computeWithdrawableAmount(options: {
+  rawWithdrawable: number;
+  pendingWithdrawals: number;
+  servicePayments: number;
+}): number {
+  return Math.max(
+    0,
+    Number(options.rawWithdrawable || 0) -
+      Number(options.pendingWithdrawals || 0) -
+      Number(options.servicePayments || 0)
+  );
+}
+
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     pending: "text-yellow-500 bg-yellow-500/10",

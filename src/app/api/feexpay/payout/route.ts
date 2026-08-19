@@ -1,7 +1,7 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { initiatePayout } from "@/lib/feexpay";
 import { NextResponse } from "next/server";
 import { requireApiUser, unauthorizedResponse } from "@/lib/api-auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -9,14 +9,21 @@ export async function POST(request: Request) {
     const user = await requireApiUser(request);
     if (!user) return unauthorizedResponse();
 
-    const { network, phoneNumber, amount, motif } = await request.json();
-
-    if (!network || !phoneNumber || !amount) {
-      return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
+    // Rate limit : max 5 demandes de retrait / minute / utilisateur
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`withdrawal:${user.id}:${ip}`, 5, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Trop de demandes. Réessayez dans ${rl.retryAfter}s.` },
+        { status: 429 }
+      );
     }
 
-    // 🔒 Le userId est dérivé de la session, pas du body
-    const userId = user.id;
+    const { network, phoneNumber, amount, motif } = await request.json();
+
+    if (!network || !phoneNumber || !amount || Number(amount) <= 0) {
+      return NextResponse.json({ error: "Paramètres manquants ou invalides" }, { status: 400 });
+    }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -24,79 +31,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Supabase non configuré" }, { status: 500 });
     }
 
-    // ✅ Client direct (fiable dans les Route Handlers)
+    // Client service role (appelé uniquement par ce serveur)
     const adminClient = createSupabaseClient(supabaseUrl, serviceKey);
+    const fullPhone = String(phoneNumber).replace(/\D/g, "");
 
-    // Vérifier le solde de l'utilisateur
-    const { data: wallet } = await adminClient
-      .from("wallets")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
+    // ✅ Délégation à la RPC SQL ATOMIQUE (request_withdrawal_feeexpay) :
+    //    - vérifie que le montant ne dépasse PAS les GAINS retirables
+    //    - vérifie le solde du wallet
+    //    - débite le wallet, crée la demande de retrait et la transaction
+    //      de débit en UNE seule transaction (aucun rollback manuel bugué).
+    const { data, error } = await adminClient.rpc("request_withdrawal_feeexpay", {
+      p_user_id: user.id,
+      p_amount: Number(amount),
+      p_method: network,
+      p_account_info: fullPhone,
+      p_description: motif ? `Retrait ${network} - ${motif}` : `Retrait ${network}`,
+    });
 
-    if (!wallet || (wallet.balance || 0) < amount) {
-      return NextResponse.json({ error: "Solde insuffisant" }, { status: 400 });
-    }
-
-    // ⚠️ NE PAS envoyer l'argent ici !
-    // Le payout FeeXPay est déclenché UNIQUEMENT quand l'admin valide le retrait
-    // (statut "paid" dans /admin/withdrawals). Cela évite d'envoyer l'argent
-    // sans validation admin.
-
-    // ✅ Débiter le wallet IMMÉDIATEMENT (le montant est réservé)
-    const { error: walletError } = await adminClient
-      .from("wallets")
-      .update({
-        balance: (wallet.balance || 0) - amount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId);
-
-    if (walletError) {
-      console.error("Wallet debit error:", walletError);
-      return NextResponse.json({ error: "Erreur lors du débit du wallet" }, { status: 500 });
-    }
-
-    // Créer la transaction de débit
-    const { data: insertedTx } = await adminClient
-      .from("wallet_transactions")
-      .insert({
-        user_id: userId,
-        wallet_id: wallet.id,
-        amount: -amount,
-        type: "withdrawal",
-        description: `Retrait ${network} - ${motif || "Demande de retrait"}`,
-        status: "pending",
-      })
-      .select("id")
-      .single();
-
-    // Créer la demande de retrait en base (en attente - confirmation admin requise)
-    // ⚠️ La table withdrawals n'a PAS de colonne description → ne pas l'inclure
-    const { data: inserted, error: insertError } = await adminClient.from("withdrawals").insert({
-      user_id: userId,
-      amount,
-      method: network,
-      account_info: phoneNumber,
-      status: "pending",
-    }).select("id").single();
-
-    if (insertError) {
-      console.error("Withdrawal insert error:", insertError);
-      // Si l'insertion échoue, rembourser le wallet
-      await adminClient
-        .from("wallets")
-        .update({
-          balance: (wallet.balance || 0),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId);
+    if (error) {
+      console.error("request_withdrawal_feeexpay RPC error:", error);
       return NextResponse.json({ error: "Erreur lors de la création du retrait" }, { status: 500 });
+    }
+
+    if (data?.success !== true) {
+      return NextResponse.json({ error: data?.error || "Retrait refusé" }, { status: 400 });
     }
 
     return NextResponse.json({
       success: true,
-      reference: inserted?.id || null,
+      reference: data.withdrawal_id,
       status: "PENDING",
       message: "Demande de retrait créée, en attente de validation admin.",
     });

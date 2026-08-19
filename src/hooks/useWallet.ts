@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { computeWithdrawableAmount } from "@/lib/utils";
 
 interface Wallet {
   id: string;
@@ -142,7 +143,12 @@ export function useWallet() {
 
       // 4. Le montant retirable = gains bruts - retraits en attente - paiements services
       const raw = Number(data?.withdrawable_amount) || 0;
-      setWithdrawableAmount(Math.max(0, raw - pendingAmount - serviceAmount));
+      const withdrawable = computeWithdrawableAmount({
+        rawWithdrawable: raw,
+        pendingWithdrawals: pendingAmount,
+        servicePayments: serviceAmount,
+      });
+      setWithdrawableAmount(withdrawable);
     } catch (error) {
       console.error("Error fetching withdrawable amount:", error);
       setWithdrawableAmount(0);

@@ -2,11 +2,19 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { checkPayinStatus } from "@/lib/feexpay";
 import { NextResponse } from "next/server";
 import { requireApiUser, unauthorizedResponse } from "@/lib/api-auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
   // 🔒 Authentification requise
   const user = await requireApiUser(request);
   if (!user) return unauthorizedResponse();
+
+  // Rate limit : max 30 vérifications / minute / utilisateur
+  const ip = getClientIp(request);
+  const rl = checkRateLimit(`deposit-status:${user.id}:${ip}`, 30, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json({ error: "Trop de requêtes", retryAfter: rl.retryAfter }, { status: 429 });
+  }
 
   const url = new URL(request.url);
   const reference = url.searchParams.get("reference");
@@ -30,62 +38,24 @@ export async function GET(request: Request) {
         );
       }
 
-      // ✅ Client direct (fiable dans les Route Handlers)
+      // Client service role (appelé uniquement par ce serveur)
       const adminClient = createSupabaseClient(supabaseUrl, serviceKey);
 
-      // 1. Récupérer le dépôt (la colonne est "reference", pas "feexpay_reference")
-      const { data: deposit } = await adminClient
-        .from("deposits")
-        .select("user_id, amount, status")
-        .eq("reference", reference)
-        .single();
+      // ✅ Crédit ATOMIQUE via la RPC SQL credit_feeexpay_deposit :
+      //    - verrouille le wallet (SELECT ... FOR UPDATE)
+      //    - met à jour le dépôt → approved
+      //    - crédite le wallet, insère la transaction ET la notification
+      //      en UNE seule transaction (anti double-crédit garanti).
+      const { data: rpcData, error: rpcError } = await adminClient.rpc("credit_feeexpay_deposit", {
+        p_reference: reference,
+      });
 
-      if (deposit) {
-        // ✅ Anti double-crédit : seulement si le dépôt est encore "pending"
-        if (deposit.status === "pending") {
-          // 2. Mettre à jour le statut du dépôt
-          await adminClient
-            .from("deposits")
-            .update({ status: "approved", updated_at: new Date().toISOString() })
-            .eq("reference", reference);
+      if (rpcError) {
+        console.error("credit_feeexpay_deposit RPC error:", rpcError);
+        return NextResponse.json({ ...status, credited: false }, { status: 200 });
+      }
 
-          // 3. Créditer le wallet automatiquement
-          const { data: wallet } = await adminClient
-            .from("wallets")
-            .select("*")
-            .eq("user_id", deposit.user_id)
-            .single();
-
-          if (wallet) {
-            await adminClient
-              .from("wallets")
-              .update({
-                balance: (wallet.balance || 0) + deposit.amount,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("user_id", deposit.user_id);
-
-            // 4. Créer la transaction
-            await adminClient.from("wallet_transactions").insert({
-              user_id: deposit.user_id,
-              wallet_id: wallet.id,
-              amount: deposit.amount,
-              type: "deposit",
-              description: `Dépôt via FeeXPay (${reference})`,
-              status: "completed",
-            });
-
-            // 5. Notifier l'utilisateur
-            await adminClient.from("notifications").insert({
-              user_id: deposit.user_id,
-              title: "Dépôt confirmé ✅",
-              message: `Votre dépôt de ${deposit.amount} FCFA a été crédité automatiquement.`,
-              type: "deposit",
-              is_read: false,
-            });
-          }
-        }
-
+      if (rpcData?.creditable) {
         return NextResponse.json({ ...status, credited: true });
       }
     }

@@ -33,9 +33,47 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Ide / editor
+.vscode/
+.idea/
+*.code-workspace
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ============================================================
+# Native builds (Capacitor Android/iOS + Electron desktop)
+# NB : android/ et ios/ (projets natifs) SONT versionnés.
+# ============================================================
+/android/app/build
+/android/build
+/android/.gradle
+/android/local.properties
+/ios/App/build
+/ios/build
+/ios/App/Pods
+/desktop/node_modules/
+/desktop/release/
+
+# Généré par scripts/generate-app-icons.mjs
+/assets/
+
+# Logs et artefacts de dev locaux
+*.log
+/dev-server.log
+/emulator-err.log
+/emulator-out.log
+
+# Secrets de signature Android (JAMAIS committer)
+keystore.properties
+/android/keystore.properties
+/android/keystore/
+*.jks
+*.keystore
+*.key
+google-services.json
+/android/app/google-services.json

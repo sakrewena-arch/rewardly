@@ -2,12 +2,23 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { initiatePayin } from "@/lib/feexpay";
 import { NextResponse } from "next/server";
 import { requireApiUser, unauthorizedResponse } from "@/lib/api-auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
     // 🔒 Authentification requise
     const user = await requireApiUser(request);
     if (!user) return unauthorizedResponse();
+
+    // Rate limit : max 10 demandes de dépôt / minute / utilisateur
+    const ip = getClientIp(request);
+    const rl = checkRateLimit(`deposit:${user.id}:${ip}`, 10, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Trop de demandes. Réessayez dans ${rl.retryAfter}s.` },
+        { status: 429 }
+      );
+    }
 
     const { network, phoneNumber, amount, description } = await request.json();
 

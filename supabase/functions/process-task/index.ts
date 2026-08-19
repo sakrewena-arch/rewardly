@@ -1,7 +1,8 @@
 // Edge Function: process-task
-// Traite une tâche soumise (validation auto ou manuelle)
+// Traite une tâche soumise (validation auto ou manuelle) — ADMIN UNIQUEMENT
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAdminUser, unauthorizedResponse } from "../_shared/admin-auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -19,8 +20,14 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 🔒 Authentification admin obligatoire (sinon 401)
+  const admin = await verifyAdminUser(req);
+  if (!admin) {
+    return unauthorizedResponse(corsHeaders);
+  }
+
   try {
-    const { submission_id, action, admin_id, comment } = await req.json();
+    const { submission_id, action, comment } = await req.json();
 
     if (!submission_id) {
       return new Response(
@@ -31,10 +38,11 @@ Deno.serve(async (req) => {
 
     let result;
 
+    // L'admin_id provient de la session vérifiée, jamais du body.
     if (action === "approve") {
       const { data, error } = await supabase.rpc("approve_submission", {
         p_submission_id: submission_id,
-        p_admin_id: admin_id,
+        p_admin_id: admin.id,
         p_comment: comment || null,
       });
       if (error) throw error;
@@ -42,7 +50,7 @@ Deno.serve(async (req) => {
     } else if (action === "reject") {
       const { data, error } = await supabase.rpc("reject_submission", {
         p_submission_id: submission_id,
-        p_admin_id: admin_id,
+        p_admin_id: admin.id,
         p_comment: comment || null,
       });
       if (error) throw error;

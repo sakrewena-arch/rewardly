@@ -256,7 +256,10 @@ $$;
 -- ============================================================
 -- 5. VALIDATE WITHDRAWAL
 -- Flux : pending → approved|rejected|paid, approved → paid
--- Le wallet n'est débité QUE lors du passage à 'paid'
+-- ⚠️ Le wallet est débité UNE SEULE FOIS, À LA DEMANDE (via la route
+-- /api/feexpay/payout ou la RPC submit_withdrawal). Ici on change le statut
+-- et on clôture la transaction de débit : AUCUN nouveau débit n'est fait
+-- au passage à 'paid' → plus de double débit (correction).
 -- ============================================================
 CREATE OR REPLACE FUNCTION validate_withdrawal(
   p_withdrawal_id UUID,
@@ -305,17 +308,27 @@ BEGIN
     RETURNING id INTO v_wallet_id;
   END IF;
 
-  -- 💰 Débit effectif UNIQUEMENT lors du paiement (paid)
+  -- 💰 Débit UNIQUE effectué À LA DEMANDE. Au passage à 'paid', on ne débite
+  -- PLUS le wallet : on clôture la transaction de débit en attente.
   IF p_status = 'paid' THEN
     UPDATE wallets
     SET locked_amount = GREATEST(0, locked_amount - v_withdrawal.amount),
-        balance = GREATEST(0, balance - v_withdrawal.amount),
         updated_at = NOW()
     WHERE id = v_wallet_id;
 
     BEGIN
-      INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status)
-      VALUES (v_withdrawal.user_id, v_wallet_id, v_withdrawal.amount, 'withdrawal', 'Retrait via ' || v_withdrawal.method, 'completed');
+      UPDATE wallet_transactions
+      SET status = 'completed'
+      WHERE id = (
+        SELECT id FROM wallet_transactions
+        WHERE user_id = v_withdrawal.user_id
+          AND type = 'withdrawal'
+          AND status = 'pending'
+          AND amount = -v_withdrawal.amount
+          AND (reference = v_withdrawal.id OR reference IS NULL)
+        ORDER BY created_at DESC
+        LIMIT 1
+      );
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
 
@@ -335,6 +348,23 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
   ELSIF p_status = 'rejected' THEN
+    BEGIN
+      -- Débit annulé : le montant réservé est remboursé côté application,
+      -- la transaction de débit est marquée échouée.
+      UPDATE wallet_transactions
+      SET status = 'failed'
+      WHERE id = (
+        SELECT id FROM wallet_transactions
+        WHERE user_id = v_withdrawal.user_id
+          AND type = 'withdrawal'
+          AND status = 'pending'
+          AND amount = -v_withdrawal.amount
+          AND (reference = v_withdrawal.id OR reference IS NULL)
+        ORDER BY created_at DESC
+        LIMIT 1
+      );
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
     BEGIN
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (v_withdrawal.user_id, 'Retrait refusé', 'Votre retrait de ' || v_withdrawal.amount::TEXT || ' FCFA a été refusé.', 'withdrawal');
@@ -822,6 +852,7 @@ AS $$
 DECLARE
   v_wallet RECORD;
   v_withdrawable DECIMAL;
+  v_withdrawal_id UUID;
   v_withdrawal_day INTEGER;
   v_timezone_offset INTEGER;
   v_investment_duration INTEGER;
@@ -873,7 +904,7 @@ BEGIN
 
   -- 🔒 Seuls les gains (total_earnings) sont retirables, pas les dépôts ni le capital investi
   v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
-                    - COALESCE((SELECT SUM(wt.amount) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0);
+                    - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0);
 
   IF v_withdrawable < p_amount THEN
     RETURN jsonb_build_object(
@@ -882,8 +913,30 @@ BEGIN
     );
   END IF;
 
+  -- 💰 Vérifier que le solde du wallet couvre bien le retrait
+  IF COALESCE(v_wallet.balance, 0) < p_amount THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Solde insuffisant pour ce retrait'
+    );
+  END IF;
+
+  -- 💰 Débit UNIQUE À LA DEMANDE (montant réservé immédiatement).
+  -- validate_withdrawal ne débitera PLUS au passage à 'paid' → aucun double débit.
+  UPDATE wallets
+  SET balance = balance - p_amount, updated_at = NOW()
+  WHERE user_id = p_user_id;
+
   INSERT INTO withdrawals (user_id, amount, method, account_info, status)
-  VALUES (p_user_id, p_amount, p_method, p_account_info, 'pending');
+  VALUES (p_user_id, p_amount, p_method, p_account_info, 'pending')
+  RETURNING id INTO v_withdrawal_id;
+
+  BEGIN
+    -- Transaction de débit liée au retrait (retrouvée par validate_withdrawal)
+    INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status, reference)
+    VALUES (p_user_id, v_wallet.id, -p_amount, 'withdrawal', 'Retrait via ' || p_method, 'pending', v_withdrawal_id);
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
 
   RETURN jsonb_build_object('success', true);
 END;
@@ -915,7 +968,7 @@ BEGIN
   END IF;
 
   v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
-                    - COALESCE((SELECT SUM(wt.amount) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0);
+                    - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0);
 
   RETURN jsonb_build_object('success', true, 'withdrawable_amount', GREATEST(v_withdrawable, 0));
 END;

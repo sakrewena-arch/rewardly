@@ -1,7 +1,8 @@
 // Edge Function: process-withdrawal
-// Traite un retrait (approbation, paiement, rejet)
+// Traite un retrait (approbation, paiement, rejet) — ADMIN UNIQUEMENT
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAdminUser, unauthorizedResponse } from "../_shared/admin-auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -19,8 +20,14 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // 🔒 Authentification admin obligatoire (sinon 401)
+  const admin = await verifyAdminUser(req);
+  if (!admin) {
+    return unauthorizedResponse(corsHeaders);
+  }
+
   try {
-    const { withdrawal_id, status, admin_id, comment } = await req.json();
+    const { withdrawal_id, status, comment } = await req.json();
 
     if (!withdrawal_id || !status) {
       return new Response(
@@ -29,9 +36,10 @@ Deno.serve(async (req) => {
       );
     }
 
+    // L'admin_id provient de la session vérifiée, jamais du body.
     const { data, error } = await supabase.rpc("validate_withdrawal", {
       p_withdrawal_id: withdrawal_id,
-      p_admin_id: admin_id,
+      p_admin_id: admin.id,
       p_status: status,
       p_comment: comment || null,
     });

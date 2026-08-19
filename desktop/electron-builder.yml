@@ -1,0 +1,48 @@
+# Configuration electron-builder — Rewardly
+# Targets : Windows (NSIS + portable), Linux (AppImage + deb), macOS (dmg + zip)
+appId: com.rewardly.app
+productName: Rewardly
+copyright: Copyright © 2026 Rewardly
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - main.js
+  - preload.js
+  - build/**
+
+# L'URL source de vérité (wrapper.config.mjs) est copiée dans l'app packagée
+extraFiles:
+  - from: ../wrapper.config.mjs
+    to: wrapper.config.mjs
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Rewardly
+
+linux:
+  icon: build/icon.png
+  category: Network
+  target:
+    - AppImage
+    - deb
+
+mac:
+  icon: build/icon.png
+  category: public.app-category.finance
+  target:
+    - dmg
+    - zip

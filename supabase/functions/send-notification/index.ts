@@ -1,7 +1,8 @@
 // Edge Function: send-notification
-// Envoie une notification à un utilisateur ou à tous les utilisateurs
+// Envoie une notification à un utilisateur ou à tous les utilisateurs — ADMIN UNIQUEMENT
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyAdminUser, unauthorizedResponse } from "../_shared/admin-auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -18,6 +19,12 @@ Deno.serve(async (req) => {
 
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // 🔒 Authentification admin obligatoire (sinon 401)
+  const admin = await verifyAdminUser(req);
+  if (!admin) {
+    return unauthorizedResponse(corsHeaders);
   }
 
   try {

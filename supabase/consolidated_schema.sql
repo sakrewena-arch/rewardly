@@ -50,12 +50,19 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   wallet_id UUID REFERENCES wallets(id) ON DELETE CASCADE NOT NULL,
   amount DECIMAL(12,0) NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal', 'reward', 'investment', 'bonus', 'referral', 'admin_adjustment')),
+  type TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal', 'reward', 'investment', 'bonus', 'referral', 'admin_adjustment', 'service')),
   description TEXT,
   reference TEXT,
   status TEXT DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'failed')),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Compatibilité : applique le type 'service' sur les bases existantes (idempotent)
+ALTER TABLE public.wallet_transactions
+  DROP CONSTRAINT IF EXISTS wallet_transactions_type_check;
+ALTER TABLE public.wallet_transactions
+  ADD CONSTRAINT wallet_transactions_type_check
+  CHECK (type IN ('deposit', 'withdrawal', 'reward', 'investment', 'bonus', 'referral', 'admin_adjustment', 'service'));
 
 -- PLANS
 CREATE TABLE IF NOT EXISTS plans (
@@ -301,60 +308,111 @@ CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DE
 -- 4. TRIGGERS & FUNCTIONS
 -- ============================================================
 
+-- Générateur de code de parrainage UNIQUE (relance tant qu'un code existe déjà)
+CREATE OR REPLACE FUNCTION generate_unique_referral_code()
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_code text;
+BEGIN
+  LOOP
+    v_code := UPPER(SUBSTRING(MD5(gen_random_uuid()::text || clock_timestamp()::text) FROM 1 FOR 8));
+    EXIT WHEN NOT EXISTS (SELECT 1 FROM public.profiles WHERE referral_code = v_code);
+  END LOOP;
+  RETURN v_code;
+END;
+$$;
+
 -- Auto-create profile on user signup (avec parrainage)
 -- NOTE: utilise rewardly_handle_new_user (nom unique) pour éviter tout conflit
 -- avec d'anciennes versions cassées de handle_new_user
+-- L'inscription via lien (?ref=CODE) :
+--   1. génère un code de parrainage unique au filleul,
+--   2. enregistre le lien référent → filleul,
+--   3. CRÉDITE IMMÉDIATEMENT la commission dans le wallet du parrain
+--      (plus besoin de ressaisir le code après l'inscription).
 CREATE OR REPLACE FUNCTION rewardly_handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, auth
 AS $handler$
 DECLARE
+  v_code text := NULL;
+  v_meta_code text := NULL;
   v_referrer_id uuid := NULL;
   v_commission numeric := 500;
-  v_code text := NULL;
+  v_wallet_id uuid := NULL;
 BEGIN
-  -- Lire le code de parrainage depuis les métadonnées
-  v_code := NULLIF(NEW.raw_user_meta_data ->> 'referral_code', '');
+  -- 🔢 Code de parrainage unique garanti
+  v_code := generate_unique_referral_code();
 
-  -- Si un code est fourni, chercher le parrain
-  IF v_code IS NOT NULL THEN
+  -- 📥 Lire le code de parrainage fourni via le lien d'inscription (?ref=CODE)
+  v_meta_code := NULLIF(NEW.raw_user_meta_data ->> 'referral_code', '');
+  IF v_meta_code IS NOT NULL THEN
     SELECT p.id INTO v_referrer_id
     FROM public.profiles AS p
-    WHERE p.referral_code = UPPER(v_code)
+    WHERE p.referral_code = UPPER(v_meta_code)
       AND p.user_id <> NEW.id
     LIMIT 1;
   END IF;
 
-  -- Créer le profil
+  -- 👤 Créer le profil (avec code unique et éventuel parrain)
   INSERT INTO public.profiles (user_id, full_name, referral_code, referred_by)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data ->> 'full_name', ''),
-    UPPER(SUBSTRING(MD5(NEW.id::text) FROM 1 FOR 8)),
+    v_code,
     v_referrer_id
   )
-  ON CONFLICT (user_id) DO NOTHING;
+  ON CONFLICT (user_id) DO UPDATE
+    SET referral_code = COALESCE(public.profiles.referral_code, excluded.referral_code);
 
-  -- Créer le wallet
+  -- 💰 Créer le wallet s'il manque
   INSERT INTO public.wallets (user_id)
   VALUES (NEW.id)
   ON CONFLICT (user_id) DO NOTHING;
 
-  -- Si un parrain a été trouvé : créer la référence + notifier
+  -- 🎁 Si un parrain a été trouvé : référence + commission payée immédiatement
   IF v_referrer_id IS NOT NULL THEN
-    SELECT COALESCE(s.value::text::numeric, 500) INTO v_commission
-    FROM public.system_settings AS s
-    WHERE s.key = 'referral_commission_fixed'
-    LIMIT 1;
-
     BEGIN
-      INSERT INTO public.referrals (referrer_id, referred_id, commission, status)
-      VALUES (v_referrer_id, NEW.id, v_commission, 'pending')
-      ON CONFLICT (referred_id) DO NOTHING;
+      SELECT COALESCE(s.value::text::numeric, 500) INTO v_commission
+      FROM public.system_settings AS s
+      WHERE s.key = 'referral_commission_fixed'
+      LIMIT 1;
 
+      -- Référence parrain → filleul
+      INSERT INTO public.referrals (referrer_id, referred_id, commission, status)
+      VALUES (v_referrer_id, NEW.id, v_commission, 'paid')
+      ON CONFLICT (referred_id) DO UPDATE
+        SET commission = COALESCE(public.referrals.commission, excluded.commission);
+
+      -- Wallet du parrain
+      SELECT id INTO v_wallet_id FROM public.wallets WHERE user_id = v_referrer_id;
+      IF v_wallet_id IS NULL THEN
+        INSERT INTO public.wallets (user_id, balance, locked_amount)
+        VALUES (v_referrer_id, 0, 0)
+        RETURNING id INTO v_wallet_id;
+      END IF;
+
+      -- 💸 Créditer la commission (balance + gains retirables)
+      UPDATE public.wallets
+      SET balance = balance + v_commission,
+          total_earnings = total_earnings + v_commission,
+          updated_at = NOW()
+      WHERE id = v_wallet_id;
+
+      -- 📒 Traçabilité
+      INSERT INTO public.wallet_transactions (user_id, wallet_id, amount, type, description, status)
+      VALUES (v_referrer_id, v_wallet_id, v_commission, 'referral',
+              'Commission de parrainage (inscription via lien)', 'completed');
+
+      -- 🔔 Notification
       INSERT INTO public.notifications (user_id, title, message, type)
-      VALUES (v_referrer_id, 'Nouveau filleul 🎉', 'Un utilisateur s''est inscrit avec votre code de parrainage !', 'referral');
+      VALUES (v_referrer_id, 'Nouveau filleul 🎉',
+              'Un utilisateur s''est inscrit avec votre code de parrainage ! +' || v_commission::TEXT || ' FCFA',
+              'referral');
     EXCEPTION WHEN OTHERS THEN
       NULL; -- Ne jamais bloquer la création d'un utilisateur
     END;
@@ -1051,35 +1109,63 @@ BEGIN
   UPDATE withdrawals SET status = p_status, admin_comment = p_comment, reviewed_by = p_admin_id, updated_at = NOW()
   WHERE id = p_withdrawal_id;
   
+  -- 💰 Débit UNIQUE effectué À LA DEMANDE (via /api/feexpay/payout ou submit_withdrawal).
+  -- Au passage à 'paid', on ne débite PLUS le wallet : on clôture simplement la
+  -- transaction de débit en attente qui référence ce retrait.
   IF p_status = 'paid' THEN
-    SELECT id INTO v_wallet_id FROM wallets WHERE user_id = v_withdrawal.user_id;
-    
-    UPDATE wallets 
-    SET balance = balance - v_withdrawal.amount, updated_at = NOW()
+    UPDATE wallets
+    SET locked_amount = GREATEST(0, locked_amount - v_withdrawal.amount), updated_at = NOW()
     WHERE user_id = v_withdrawal.user_id;
-    
+
     BEGIN
-      INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status)
-      VALUES (v_withdrawal.user_id, v_wallet_id, v_withdrawal.amount, 'withdrawal', 'Retrait via ' || v_withdrawal.method, 'completed');
+      UPDATE wallet_transactions
+      SET status = 'completed'
+      WHERE id = (
+        SELECT id FROM wallet_transactions
+        WHERE user_id = v_withdrawal.user_id
+          AND type = 'withdrawal'
+          AND status = 'pending'
+          AND amount = -v_withdrawal.amount
+          AND (reference = v_withdrawal.id OR reference IS NULL)
+        ORDER BY created_at DESC
+        LIMIT 1
+      );
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
-    
+
     BEGIN
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (v_withdrawal.user_id, 'Retrait payé', 'Votre retrait de ' || v_withdrawal.amount::TEXT || ' FCFA a été payé.', 'withdrawal');
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
   ELSIF p_status = 'approved' THEN
-    UPDATE wallets 
+    UPDATE wallets
     SET locked_amount = locked_amount + v_withdrawal.amount, updated_at = NOW()
     WHERE user_id = v_withdrawal.user_id;
-    
+
     BEGIN
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (v_withdrawal.user_id, 'Retrait approuvé', 'Votre retrait de ' || v_withdrawal.amount::TEXT || ' FCFA a été approuvé. Paiement en cours.', 'withdrawal');
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
   ELSIF p_status = 'rejected' THEN
+    BEGIN
+      -- Le montant réservé à la demande a été remboursé côté application :
+      -- la transaction de débit est marquée comme échouée (aucun transfert effectué).
+      UPDATE wallet_transactions
+      SET status = 'failed'
+      WHERE id = (
+        SELECT id FROM wallet_transactions
+        WHERE user_id = v_withdrawal.user_id
+          AND type = 'withdrawal'
+          AND status = 'pending'
+          AND amount = -v_withdrawal.amount
+          AND (reference = v_withdrawal.id OR reference IS NULL)
+        ORDER BY created_at DESC
+        LIMIT 1
+      );
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
     BEGIN
       INSERT INTO notifications (user_id, title, message, type)
       VALUES (v_withdrawal.user_id, 'Retrait refusé', 'Votre retrait de ' || v_withdrawal.amount::TEXT || ' FCFA a été refusé.', 'withdrawal');
@@ -1601,6 +1687,7 @@ AS $$
 DECLARE
   v_wallet RECORD;
   v_withdrawable DECIMAL;
+  v_withdrawal_id UUID;
   v_withdrawal_day INTEGER;
   v_investment_duration INTEGER;
   v_last_investment RECORD;
@@ -1642,7 +1729,7 @@ BEGIN
   
   -- 🔒 Seuls les gains (total_earnings) sont retirables, pas les dépôts ni le capital investi
   v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
-                    - COALESCE((SELECT SUM(wt.amount) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0);
+                    - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0);
   
   IF v_withdrawable < p_amount THEN
     RETURN jsonb_build_object(
@@ -1651,8 +1738,30 @@ BEGIN
     );
   END IF;
   
+  -- 💰 Vérifier que le solde du wallet couvre bien le retrait
+  IF COALESCE(v_wallet.balance, 0) < p_amount THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'Solde insuffisant pour ce retrait'
+    );
+  END IF;
+  
+  -- 💰 Débit UNIQUE À LA DEMANDE (montant réservé immédiatement).
+  -- validate_withdrawal ne débitera PLUS au passage à 'paid' → aucun double débit.
+  UPDATE wallets
+  SET balance = balance - p_amount, updated_at = NOW()
+  WHERE user_id = p_user_id;
+
   INSERT INTO withdrawals (user_id, amount, method, account_info, status)
-  VALUES (p_user_id, p_amount, p_method, p_account_info, 'pending');
+  VALUES (p_user_id, p_amount, p_method, p_account_info, 'pending')
+  RETURNING id INTO v_withdrawal_id;
+  
+  BEGIN
+    -- Transaction de débit liée au retrait (retrouvée par validate_withdrawal)
+    INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status, reference)
+    VALUES (p_user_id, v_wallet.id, -p_amount, 'withdrawal', 'Retrait via ' || p_method, 'pending', v_withdrawal_id);
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
   
   RETURN jsonb_build_object('success', true);
 END;
@@ -1677,6 +1786,150 @@ BEGIN
   RETURN jsonb_build_object('success', true);
 END;
 $$;
+
+-- ============================================================
+-- 7bis. RPC FEEXPAY ATOMIQUES (service_role uniquement)
+-- ============================================================
+-- Retrait FeeXPay : débit + demande + transaction en UNE transaction,
+-- le montant est limité aux GAINS retirables (jamais dépôts/capital).
+CREATE OR REPLACE FUNCTION request_withdrawal_feeexpay(
+  p_user_id UUID,
+  p_amount DECIMAL,
+  p_method TEXT,
+  p_account_info TEXT,
+  p_description TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  v_wallet wallets%ROWTYPE;
+  v_withdrawable DECIMAL := 0;
+  v_withdrawal_id UUID;
+  v_role TEXT;
+BEGIN
+  v_role := COALESCE(current_setting('request.jwt.claims', true)::jsonb->>'role', '');
+  IF v_role IN ('anon', 'authenticated') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
+  END IF;
+
+  IF p_amount IS NULL OR p_amount <= 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Montant invalide');
+  END IF;
+
+  -- 🔒 Verrouiller le wallet (anti course)
+  SELECT * INTO v_wallet FROM wallets WHERE user_id = p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    INSERT INTO wallets (user_id, balance, locked_amount)
+    VALUES (p_user_id, 0, 0)
+    RETURNING * INTO v_wallet;
+  END IF;
+
+  -- 💰 Montant retirable = gains - retraits payés - retraits en attente
+  v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
+      - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt
+                  WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0)
+      - COALESCE((SELECT SUM(w.amount) FROM withdrawals w
+                  WHERE w.user_id = p_user_id AND w.status IN ('pending', 'approved')), 0);
+
+  IF v_withdrawable < p_amount THEN
+    RETURN jsonb_build_object('success', false, 'error',
+      'Solde retirable insuffisant. Seuls vos gains sont retirables (disponible: ' || v_withdrawable::TEXT || ' FCFA)');
+  END IF;
+
+  IF COALESCE(v_wallet.balance, 0) < p_amount THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Solde insuffisant pour ce retrait');
+  END IF;
+
+  -- 💸 Débit UNIQUE + demande + transaction
+  UPDATE wallets
+  SET balance = balance - p_amount,
+      updated_at = NOW()
+  WHERE id = v_wallet.id;
+
+  INSERT INTO withdrawals (user_id, amount, method, account_info, status)
+  VALUES (p_user_id, p_amount, p_method, p_account_info, 'pending')
+  RETURNING id INTO v_withdrawal_id;
+
+  INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status, reference)
+  VALUES (p_user_id, v_wallet.id, -p_amount, 'withdrawal',
+          COALESCE(p_description, 'Retrait via ' || p_method), 'pending', v_withdrawal_id);
+
+  RETURN jsonb_build_object('success', true, 'withdrawal_id', v_withdrawal_id, 'withdrawable_amount', v_withdrawable);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
+REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
+
+-- Crédit de dépôt FeeXPay ATOMIQUE (verrou ligne + anti double-crédit)
+CREATE OR REPLACE FUNCTION credit_feeexpay_deposit(
+  p_reference TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  v_deposit deposits%ROWTYPE;
+  v_wallet wallets%ROWTYPE;
+  v_role TEXT;
+BEGIN
+  v_role := COALESCE(current_setting('request.jwt.claims', true)::jsonb->>'role', '');
+  IF v_role IN ('anon', 'authenticated') THEN
+    RETURN jsonb_build_object('success', false, 'creditable', false, 'error', 'Non autorisé');
+  END IF;
+
+  SELECT * INTO v_deposit
+  FROM deposits
+  WHERE reference = p_reference
+  ORDER BY created_at DESC
+  LIMIT 1
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'creditable', false, 'reason', 'not_found');
+  END IF;
+
+  IF v_deposit.status = 'approved' THEN
+    RETURN jsonb_build_object('success', true, 'creditable', false, 'reason', 'already_credited');
+  END IF;
+
+  IF v_deposit.status = 'rejected' THEN
+    RETURN jsonb_build_object('success', false, 'creditable', false, 'reason', 'rejected');
+  END IF;
+
+  SELECT * INTO v_wallet FROM wallets WHERE user_id = v_deposit.user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    INSERT INTO wallets (user_id, balance, locked_amount)
+    VALUES (v_deposit.user_id, 0, 0)
+    RETURNING * INTO v_wallet;
+  END IF;
+
+  UPDATE deposits SET status = 'approved', updated_at = NOW() WHERE id = v_deposit.id;
+  UPDATE wallets SET balance = balance + v_deposit.amount, updated_at = NOW() WHERE id = v_wallet.id;
+
+  INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status, reference)
+  VALUES (v_deposit.user_id, v_wallet.id, v_deposit.amount, 'deposit',
+          'Dépôt via FeeXPay (' || p_reference || ')', 'completed', p_reference);
+
+  INSERT INTO notifications (user_id, title, message, type)
+  VALUES (v_deposit.user_id, 'Dépôt confirmé ✅',
+          'Votre dépôt de ' || v_deposit.amount::TEXT || ' FCFA a été crédité automatiquement.', 'deposit');
+
+  RETURN jsonb_build_object('success', true, 'creditable', true, 'credited', true);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM anon;
+REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION credit_feeexpay_deposit(TEXT) TO service_role;
 
 -- ============================================================
 -- 8. SEED DATA (ON CONFLICT DO NOTHING)

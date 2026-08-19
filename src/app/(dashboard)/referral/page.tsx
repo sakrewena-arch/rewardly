@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Copy, Share2, Users, Gift, Check, Link2, MessageCircle, Send } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getAppBaseUrl } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { createClient } from "@/lib/supabase/client";
@@ -60,7 +60,13 @@ export default function ReferralPage() {
   }, [user]);
 
   const referralCode = profile?.referral_code || "";
-  const referralLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/register?ref=${referralCode}`;
+  // Utilise le vrai domaine consulté (window.location.origin) : le lien ne
+  // montre JAMAIS localhost en production, quel que soit l'env de build.
+  const getReferralLink = () => {
+    if (!referralCode) return "";
+    return `${getAppBaseUrl().replace(/\/$/, "")}/register?ref=${encodeURIComponent(referralCode)}`;
+  };
+  const referralLink = getReferralLink();
 
   // Si non connecté, afficher le message d'authentification
   if (!user) {
