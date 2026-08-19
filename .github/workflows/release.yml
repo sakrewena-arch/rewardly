@@ -32,6 +32,11 @@ jobs:
       - name: Install dependencies
         run: npm install --prefix desktop
 
+      # AppImage nécessite libfuse2 sur les runners Ubuntu
+      - name: Préparer l'environnement Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2
+
       - name: Synchroniser la version native
         run: node scripts/sync-native-versions.mjs
 
@@ -104,15 +109,28 @@ jobs:
   release:
     name: Publier GitHub Release
     needs: [build-electron, build-android]
+    # S'exécute même si un job de build échoue : on publie les installateurs
+    # des plateformes qui ont réussi (ex: Windows/macOS OK, Linux KO).
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Download all installers
         uses: actions/download-artifact@v4
         with:
           path: dist-artifacts
+          pattern: installers-*
           merge-multiple: true
+        continue-on-error: true
+
+      - name: Vérifier la présence d'assets
+        id: check-assets
+        run: |
+          count=$(find dist-artifacts -type f 2>/dev/null | wc -l)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "ASSETS=$count"
 
       - name: Create Release
+        if: steps.check-assets.outputs.count > '0'
         uses: softprops/action-gh-release@v2
         with:
           name: Rewardly ${{ github.ref_name }}

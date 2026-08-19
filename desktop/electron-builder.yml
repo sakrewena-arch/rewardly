@@ -36,9 +36,10 @@ nsis:
 linux:
   icon: build/icon.png
   category: Network
+  # AppImage seul = build natif fiable sur CI (le .deb nécessite fpm,
+  # outil externe qui échoue fréquemment sur les runners GitHub).
   target:
     - AppImage
-    - deb
 
 mac:
   icon: build/icon.png
