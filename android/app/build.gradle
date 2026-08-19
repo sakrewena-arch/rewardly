@@ -20,10 +20,14 @@ def envOrProp = { prop, env ->
     return (v != null && !v.isEmpty()) ? v : System.getenv(env)
 }
 
-def keystorePath = envOrProp("storeFile", "ANDROID_KEYSTORE_PATH")
-def keystorePass = envOrProp("storePassword", "ANDROID_KEYSTORE_PASSWORD")
-def keyAlias    = envOrProp("keyAlias", "ANDROID_KEY_ALIAS")
-def keyPass     = envOrProp("keyPassword", "ANDROID_KEY_PASSWORD")
+// Préfixe "ks" pour éviter tout conflit avec le DSL Gradle
+// (storeFile / storePassword / keyAlias / keyPassword)
+def ksPath = envOrProp("storeFile", "ANDROID_KEYSTORE_PATH")
+def ksStorePass = envOrProp("storePassword", "ANDROID_KEYSTORE_PASSWORD")
+def ksAlias = envOrProp("keyAlias", "ANDROID_KEY_ALIAS")
+def ksKeyPass = envOrProp("keyPassword", "ANDROID_KEY_PASSWORD")
+
+def keystoreAvailable = (ksPath != null) && (ksStorePass != null) && (ksAlias != null) && (ksKeyPass != null)
 
 android {
     namespace = "com.rewardly.app"
@@ -43,12 +47,12 @@ android {
         }
     }
     signingConfigs {
-        if (keystoreConfigured || envOrProp("storeFile", "ANDROID_KEYSTORE_PATH") != null) {
+        if (keystoreAvailable) {
             release {
-                storeFile file(keystorePath)
-                storePassword keystorePass
-                keyAlias keyAlias
-                keyPassword keyPass
+                storeFile file(ksPath)
+                storePassword ksStorePass
+                keyAlias ksAlias
+                keyPassword ksKeyPass
             }
         }
     }
@@ -56,7 +60,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (keystoreConfigured || envOrProp("storeFile", "ANDROID_KEYSTORE_PATH") != null) {
+            if (keystoreAvailable) {
                 signingConfig signingConfigs.release
             }
         }
