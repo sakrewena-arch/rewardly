@@ -45,15 +45,23 @@ export async function GET() {
     const find = (patterns: string[]) =>
       assets.filter((a: any) => patterns.some((p) => a.name.toLowerCase().includes(p)));
 
+    // Prioriser l'APK SIGNÉ : "app-release.apk" passe devant "app-release-unsigned.apk"
+    // (Github ne garantit pas l'ordre des assets).
+    const android = find([".apk", ".aab"]).sort((a: any, b: any) => {
+      const aSigned = a.name.toLowerCase().includes("unsigned") ? 1 : 0;
+      const bSigned = b.name.toLowerCase().includes("unsigned") ? 1 : 0;
+      return aSigned - bSigned;
+    });
+
     return NextResponse.json({
       tag: release.tag_name,
       name: release.name,
       publishedAt: release.published_at,
       notes: release.body,
-      android: find([".apk", ".aab"]),
-      windows: find(["setup", "portable", ".exe"]).filter((a: any) => a.name.endsWith(".exe")),
+      android,
+      windows: find([".exe"]),
       linux: find([".appimage", ".deb"]),
-      macos: find([".dmg", ".zip"]).filter((a: any) => a.name.endsWith(".dmg")),
+      macos: find([".dmg"]),
       all: assets,
     });
   } catch (error: any) {
