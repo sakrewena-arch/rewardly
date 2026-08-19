@@ -53,7 +53,9 @@ android {
     signingConfigs {
         if (keystoreAvailable) {
             release {
-                storeFile file(ksPath)
+                // rootProject.file() résout le chemin par rapport à android/
+                // (supporte chemin relatif "keystore/..." ET chemin absolu CI).
+                storeFile rootProject.file(ksPath)
                 storePassword ksStorePass
                 keyAlias ksAlias
                 keyPassword ksKeyPass
