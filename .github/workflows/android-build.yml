@@ -38,17 +38,21 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Configure release signing (si secrets dispo)
-        if: env.ANDROID_KEYSTORE_PATH != ''
+        if: ${{ secrets.ANDROID_KEYSTORE_PATH != '' }}
         env:
           ANDROID_KEYSTORE_PATH: ${{ secrets.ANDROID_KEYSTORE_PATH }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         working-directory: android
-        run: ./gradlew assembleRelease
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
       - name: Upload APK (debug)
         uses: actions/upload-artifact@v4
@@ -58,7 +62,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload APK (release)
-        if: env.ANDROID_KEYSTORE_PATH != ''
+        if: ${{ secrets.ANDROID_KEYSTORE_PATH != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: rewardly-release-apk
