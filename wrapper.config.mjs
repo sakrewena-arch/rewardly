@@ -6,12 +6,12 @@
 //    Les APK / exe / dmg chargent cette URL — le site doit être en ligne.
 //
 //    Vous pouvez aussi passer la variable d'environnement WRAPPER_APP_URL
-//    au moment du build :  $env:WRAPPER_APP_URL="https://votre-app.vercel.app"
+//    au moment du build :  $env:WRAPPER_APP_URL="https://rewardlyfree.vercel.app"
 // ============================================================
 
 export const APP_NAME = "Rewardly";
 export const APP_ID = "com.rewardly.app";
-export const APP_URL = process.env.WRAPPER_APP_URL || "https://rewardly.vercel.app";
+export const APP_URL = process.env.WRAPPER_APP_URL || "https://rewardlyfree.vercel.app";
 
 // Dossier de sortie web pour Capacitor (fallback local de chargement/offline)
 export const WEB_DIR = "dist";

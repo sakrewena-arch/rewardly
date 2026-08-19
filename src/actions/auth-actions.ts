@@ -18,7 +18,7 @@ async function getRequestOrigin(): Promise<string> {
   if (configured && !/^https?:\/\/localhost(:\d+)?$/.test(configured)) {
     return configured;
   }
-  return "https://rewardly.vercel.app";
+  return "https://rewardlyfree.vercel.app";
 }
 
 /**

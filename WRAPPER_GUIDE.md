@@ -19,10 +19,11 @@ Les wrappers chargent l'application **Next.js déjà déployée** (Server Action
 Éditez **`wrapper.config.mjs`** à la racine :
 
 ```js
-export const APP_URL = process.env.WRAPPER_APP_URL || "https://VOTRE-DOMAINE.vercel.app";
+export const APP_URL = process.env.WRAPPER_APP_URL || "https://rewardlyfree.vercel.app";
 ```
 
-> ✅ Action requise : **remplacez** `https://VOTRE-DOMAINE.vercel.app` par l'URL HTTPS réelle de votre app (ou exportez la variable d'environnement `WRAPPER_APP_URL` au moment du build).
+> ✅ Action : l'URL par défaut de `wrapper.config.mjs` pointe sur **`https://rewardlyfree.vercel.app`**
+> (votre app de production). Pour changer, exportez la variable `WRAPPER_APP_URL` au moment du build.
 > L'`appId` est `com.rewardly.app` (utilisé pour les stores).
 
 ### 🔑 Configuration Android (push FCM + signature)

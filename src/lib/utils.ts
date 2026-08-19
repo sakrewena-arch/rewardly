@@ -63,7 +63,7 @@ export function getAppBaseUrl(): string {
   if (configured && !/^https?:\/\/localhost(:\d+)?$/.test(configured)) {
     return configured;
   }
-  return configured || "https://rewardly.vercel.app";
+  return configured || "https://rewardlyfree.vercel.app";
 }
 
 /**

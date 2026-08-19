@@ -26,7 +26,7 @@ function resolveAppUrl() {
       /* fichier suivant */
     }
   }
-  return "https://rewardly.vercel.app";
+  return "https://rewardlyfree.vercel.app";
 }
 
 const APP_URL = resolveAppUrl();
