@@ -91,9 +91,22 @@ jobs:
           WRAPPER_APP_URL: ${{ secrets.WRAPPER_APP_URL }}
         run: npm run build:dist && npx cap sync android
 
+      - name: Décode le keystore (si le secret existe)
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            mkdir -p android/keystore
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/keystore/rewardly-release.jks
+            echo "KEYSTORE_DECODE_OK"
+          else
+            echo "Aucun keystore fourni — APK non signé"
+          fi
+
       - name: Build release APK (signé si secrets fournis)
         env:
-          ANDROID_KEYSTORE_PATH: ${{ secrets.ANDROID_KEYSTORE_PATH }}
+          ANDROID_KEYSTORE_PATH: android/keystore/rewardly-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}

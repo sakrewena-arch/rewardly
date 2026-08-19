@@ -53,7 +53,31 @@ Rewardly peut être empaqueté en apps installables :
 - **Windows** (`exe` NSIS + portable), **Linux** (`AppImage`/`deb`), **macOS** (`dmg`) : **Electron**
 
 > ✅ **Guide complet & commandes : [WRAPPER_GUIDE.md](./WRAPPER_GUIDE.md)**
-> ⚠️ Pensez à configurer l'URL de production dans **`wrapper.config.mjs`**.
+> ⚠️ L'URL de production est `https://rewardlyfree.vercel.app` (dans `wrapper.config.mjs`).
+
+### 🔐 Signature Android (Release / Play Store)
+
+Pour que le build release soit **signé** :
+
+1. Générer les valeurs des secrets :
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/android-signing-secrets.ps1
+```
+(keystore local : `android/keystore/rewardly-release.jks` + `android/keystore.properties`, tous deux gitignorés)
+
+2. Ajouter les **4 secrets** sur GitHub :
+`Settings → Secrets and variables → Actions → New repository secret`
+
+| Secret | Valeur |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | base64 du `.jks` (affiché par le script) |
+| `ANDROID_KEYSTORE_PASSWORD` | mot de passe du keystore |
+| `ANDROID_KEY_ALIAS` | alias du keystore |
+| `ANDROID_KEY_PASSWORD` | mot de passe de l'alias |
+
+3. Le workflow `android-build.yml` active alors la signature → `app-release.apk` signé.
+
+> 💡 Sans secrets, le build produit un APK **non signé** (`app-release-unsigned.apk`) — installable via « Sources inconnues », mais pas pour le Play Store.
 
 ## 📋 Prérequis
 
