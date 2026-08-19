@@ -6,6 +6,10 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# Nécessaire pour créer/éditer la GitHub Release et uploader les assets
+permissions:
+  contents: write
+
 jobs:
   build-electron:
     name: Electron (${{ matrix.os }})
