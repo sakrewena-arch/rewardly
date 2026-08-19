@@ -9,15 +9,19 @@ apply plugin: 'com.android.application'
 // ============================================================
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
-def keystoreConfigured = false
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-    keystoreConfigured = true
 }
+
+// Normalise les valeurs : chaîne vide / null → null (absent).
+// En CI, un secret non configuré arrive comme "" et ne doit PAS activer
+// la signature (sinon `file("")` échoue).
+def norm = { v -> (v != null && !v.toString().trim().isEmpty()) ? v.toString().trim() : null }
 
 def envOrProp = { prop, env ->
     def v = keystoreProperties.getProperty(prop)
-    return (v != null && !v.isEmpty()) ? v : System.getenv(env)
+    if (v != null && !v.trim().isEmpty()) return v.trim()
+    return norm(System.getenv(env))
 }
 
 // Préfixe "ks" pour éviter tout conflit avec le DSL Gradle
