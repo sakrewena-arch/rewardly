@@ -111,7 +111,27 @@ export default function AdminNotificationsPage() {
         if (error) throw error;
       }
 
-      setFeedback("Notification envoyée avec succès !");
+      // Envoyer le PUSH NATIF (FCM) aux appareils de l'utilisateur (ou tous)
+      let pushFeedback = "";
+      try {
+        const pushResp = await fetch("/api/push/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: target === "user" ? selectedUser : undefined,
+            title: title.trim(),
+            message: message.trim(),
+          }),
+        });
+        const pushData = await pushResp.json();
+        if (pushData.sent !== undefined) {
+          pushFeedback = ` (push: ${pushData.sent}/${pushData.total || 0} appareils notifiés)`;
+        }
+      } catch {
+        pushFeedback = " (push FCM non envoyé)";
+      }
+
+      setFeedback(`Notification envoyée avec succès !${pushFeedback}`);
       setTitle("");
       setMessage("");
       setLink("");
