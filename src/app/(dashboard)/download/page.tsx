@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeft, Download, Check, Share2, Smartphone, Monitor, Apple, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Download, Check, Share2, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -222,7 +222,7 @@ function DownloadGrid({ releases }: { releases: ReleasesData }) {
       {/* Android */}
       <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
         <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-          <Smartphone className="w-5 h-5 text-green-600" />
+          <img src="/images/android.jfif" alt="Android" className="w-8 h-8 object-contain" />
         </div>
         <div className="flex-1">
           <p className="font-medium text-sm">Android</p>
@@ -246,7 +246,7 @@ function DownloadGrid({ releases }: { releases: ReleasesData }) {
       {/* Windows */}
       <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
         <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-          <Monitor className="w-5 h-5 text-sky-600" />
+          <img src="/images/windows.jfif" alt="Windows" className="w-8 h-8 object-contain" />
         </div>
         <div className="flex-1">
           <p className="font-medium text-sm">Windows</p>
@@ -275,7 +275,7 @@ function DownloadGrid({ releases }: { releases: ReleasesData }) {
       {/* Linux */}
       <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
         <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-          <Monitor className="w-5 h-5 text-orange-600" />
+          <img src="/images/linux.svg" alt="Linux" className="w-8 h-8 object-contain" />
         </div>
         <div className="flex-1">
           <p className="font-medium text-sm">Linux</p>
@@ -304,7 +304,7 @@ function DownloadGrid({ releases }: { releases: ReleasesData }) {
       {/* iOS */}
       <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
         <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-          <Apple className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+          <img src="/images/ios.jfif" alt="iOS" className="w-8 h-8 object-contain" />
         </div>
         <div className="flex-1">
           <p className="font-medium text-sm">iPhone / iPad</p>

@@ -32,4 +32,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Notifications push (plugin @capacitor/push-notifications) :
+         POST_NOTIFICATIONS est REQUIS sur Android 13+ pour demander les
+         notifications sans crash. WAKE_LOCK recommandé pour FCM. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 </manifest>

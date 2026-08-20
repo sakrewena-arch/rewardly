@@ -32,21 +32,57 @@ export function NativeCapacitor() {
         }
 
         // ---------- Push notifications ----------
+        // Protégé au maximum : une erreur ici (FCM non configuré, permission
+        // refusée, etc.) ne doit JAMAIS faire crasher l'app native.
         try {
           const { PushNotifications } = await import("@capacitor/push-notifications");
-          const perms = await PushNotifications.requestPermissions();
-          if (perms.receive !== "granted") return;
 
-          await PushNotifications.register();
+          // Vérifier la permission sans lancer de dialogue natif déstabilisant
+          let perms;
+          try {
+            perms = await PushNotifications.checkPermissions();
+          } catch {
+            perms = null;
+          }
+          if (!perms || perms.receive === "denied") {
+            return;
+          }
 
-          PushNotifications.addListener("registration", async ({ value }) => {
-            if (disposed || !value) return;
-            const { registerPushTokenAction } = await import("@/actions/push-actions");
-            await registerPushTokenAction(platform === "ios" ? "ios" : "android", value);
-          });
+          let finalPerms;
+          try {
+            finalPerms = await PushNotifications.requestPermissions().catch(() => null);
+          } catch {
+            finalPerms = null;
+          }
+          if (!finalPerms || finalPerms.receive !== "granted") {
+            return;
+          }
+
+          // Enregistrement : peut échouer si FCM n'est pas configuré
+          // (google-services.json absent). On ne crash JAMAIS.
+          try {
+            await PushNotifications.register();
+          } catch (err) {
+            console.log("Push register indisponible (FCM ?):", err);
+            return;
+          }
+
+          try {
+            PushNotifications.addListener("registration", async ({ value }) => {
+              if (disposed || !value) return;
+              try {
+                const { registerPushTokenAction } = await import("@/actions/push-actions");
+                await registerPushTokenAction(platform === "ios" ? "ios" : "android", value);
+              } catch (e) {
+                console.log("registerPushTokenAction:", e);
+              }
+            });
+          } catch (e) {
+            console.log("addListener registration:", e);
+          }
 
           PushNotifications.addListener("registrationError", (err) => {
-            console.error("Push registration error:", err);
+            console.log("Push registration error (non bloquant):", err);
           });
         } catch (err) {
           // Push non configuré (google-services.json / APNs) : non bloquant.
