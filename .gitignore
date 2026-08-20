@@ -75,5 +75,6 @@ keystore.properties
 *.jks
 *.keystore
 *.key
-google-services.json
-/android/app/google-services.json
+# google-services.json est VOLONTAIREMENT versionné : il est requis par le
+# build CI Android pour activer FCM (notifications push). Ne contient pas de
+# clé secrète (seulement project_id / app id Firebase).

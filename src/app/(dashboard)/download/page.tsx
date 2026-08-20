@@ -275,7 +275,7 @@ function DownloadGrid({ releases }: { releases: ReleasesData }) {
       {/* Linux */}
       <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
         <div className="w-10 h-10 rounded-xl bg-white dark:bg-white/10 border border-gray-200 dark:border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-          <img src="/images/linux.svg" alt="Linux" className="w-8 h-8 object-contain" />
+          <img src="/images/lin.jfif" alt="Linux" className="w-8 h-8 object-contain" />
         </div>
         <div className="flex-1">
           <p className="font-medium text-sm">Linux</p>
