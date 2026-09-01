@@ -103,8 +103,7 @@ export default function WelcomePopup() {
         const a = document.createElement("a");
         a.href = asset.downloadUrl;
         a.download = asset.name;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
+        a.style.display = "none";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);

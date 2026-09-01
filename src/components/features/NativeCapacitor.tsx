@@ -16,6 +16,7 @@ export function NativeCapacitor() {
   useEffect(() => {
     let disposed = false;
     let backHandler: { remove: () => void } | null = null;
+    let undoLinkCapture: (() => void) | null = null;
 
     const init = async () => {
       try {
@@ -24,7 +25,53 @@ export function NativeCapacitor() {
 
         const platform = Capacitor.getPlatform(); // "android" | "ios"
 
-        // ---------- Bouton retour natif (Android) ----------
+        // ---------- Intercepter les liens externes (empêche l'ouverture de Chrome) ----------
+        // Dans une WebView Capacitor, un lien target="_blank" ou une redirection
+        // vers un autre domaine DELEGUE au navigateur système (Chrome), ce qui fait
+        // "sortir" l'app. On capture :
+        //  1. window.open → redirige via le plugin Browser
+        //  2. clics sur <a target="_blank"> → redirige via le plugin Browser
+        // Les URLs de MÊME ORIGINE restent dans la WebView.
+        try {
+          const openExternal = (url: string) => {
+            const u = new URL(url, window.location.href);
+            if (u.origin === window.location.origin) return false;
+            void import("@capacitor/browser").then(({ Browser }) => {
+              Browser.open({ url: u.href }).catch(() => {
+                window.location.href = u.href;
+              });
+            });
+            return true;
+          };
+
+          // 2. Intercepter les clics sur les liens target="_blank" (capture phase)
+          const onLinkClick = (e: MouseEvent) => {
+            const anchor = (e.target as HTMLElement | null)?.closest?.("a");
+            if (!anchor) return;
+            const href = anchor.getAttribute("href");
+            if (!href) return;
+            const isBlank = anchor.target === "_blank";
+            const isDownload = anchor.hasAttribute("download");
+            // download → laisser la WebView télécharger en interne
+            if (isDownload) return;
+            if (isBlank && openExternal(href)) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          };
+          document.addEventListener("click", onLinkClick, true);
+          undoLinkCapture = () => document.removeEventListener("click", onLinkClick, true);
+
+          // 1. Intercepter window.open natif de la WebView
+          const nativeWindowOpen = window.open;
+          window.open = function (url?: string | URL, target?: string, features?: string) {
+            const urlStr = url?.toString() || "";
+            if (openExternal(urlStr)) return null;
+            return nativeWindowOpen?.call(window, url, target, features) ?? null;
+          };
+        } catch {
+          /* non bloquant */
+        }
         // L'app Next.js est une SPA : même quand la WebView n'a qu'UNE page,
         // l'historique interne SPA (window.history.length > 1) doit permettre
         // de revenir aux pages précédentes visitées dans l'app.
@@ -122,6 +169,12 @@ export function NativeCapacitor() {
       // Retirer le listener backButton proprement à la destruction du composant.
       try {
         backHandler?.remove?.();
+      } catch {
+        /* ignore */
+      }
+      // Retirer le listener de clic sur les liens externes.
+      try {
+        undoLinkCapture?.();
       } catch {
         /* ignore */
       }

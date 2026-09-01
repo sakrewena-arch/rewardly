@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Nécessaire pour le plugin @capacitor/browser sur Android 11+ :
+         permet d'ouvrir les URLs externes dans le navigateur système. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
