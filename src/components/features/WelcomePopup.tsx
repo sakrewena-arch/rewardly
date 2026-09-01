@@ -1,9 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Download, Megaphone, Coins, CheckCircle, FileText, X, Loader2, Smartphone, Monitor, Apple } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
 
 const STORAGE_KEY = "rewardly_welcome_accepted";
 
@@ -41,6 +42,7 @@ interface ReleasesData {
 }
 export default function WelcomePopup() {
   const router = useRouter();
+  const { install: installPWA, isInstalled: isPWAInstalled } = usePWAInstall();
   const [show, setShow] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [step, setStep] = useState<"accept" | "options">("accept");
@@ -111,11 +113,21 @@ export default function WelcomePopup() {
         return;
       }
 
-      // Pas d'asset pour cette plateforme → fallback vers la page /download
-      if (platform === "ios" || platform === "other") {
-        router.push("/download");
+      // Pas d'asset natif pour cette plateforme :
+      //  - iOS → instructions PWA (pas d'IPA hors App Store)
+      //  - Autre → tentative d'installation PWA DIRECTE (beforeinstallprompt)
+      //    sinon fallback vers la page /download.
+      if (platform === "ios") {
+        setDownloadError("Sur iPhone/iPad : menu Partager puis Sur l'écran d'accueil pour installer Rewardly.");
       } else {
-        setDownloadError("Aucun installateur disponible pour votre plateforme pour le moment.");
+        if (isPWAInstalled) {
+          setDownloadError("L'application est déjà installée sur cet appareil.");
+        } else {
+          const res = await installPWA();
+          if (!res.installed && !res.needsIOSInstructions) {
+            router.push("/download");
+          }
+        }
       }
       setDownloading(false);
     } catch (e) {

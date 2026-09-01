@@ -102,7 +102,7 @@ export function BottomNav() {
                 key={item.href}
                 onClick={() => router.push(item.href)}
                 className={cn(
-                  "relative flex items-center gap-2 px-3 py-2 rounded-full transition-all duration-300",
+                  "relative flex items-center gap-2 px-3 py-2 rounded-full transition-all duration-300 active:scale-[0.9]",
                   isActive ? "bg-white" : "hover:bg-white/10"
                 )}
               >

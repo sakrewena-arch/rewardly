@@ -139,6 +139,35 @@
     @apply truncate;
     min-width: 0;
   }
+/* ============================================================
+     PROTECTION GLOBALE ANTI-DÉBORDEMENT SUR MOBILE
+     ============================================================ */
+  /* Tout texte long dans une carte / un bouton / un item de liste
+     est coupé proprement au lieu de déborder de l'écran. */
+  .card p,
+  .card h1,
+  .card h2,
+  .card h3,
+  .card span,
+  .card button,
+  .card a {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
+  }
+
+  /* Les éléments flex avec texte ne doivent jamais pousser hors écran */
+  .flex > * {
+    min-width: 0;
+  }
+
+  /* Empêche le scroll horizontal accidentel sur tout le site mobile */
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
 }
 
 /* Smooth dark mode transition */

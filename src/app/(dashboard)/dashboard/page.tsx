@@ -5,6 +5,7 @@ import { ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, Gift, Eye, EyeOff, Ext
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/hooks/useWallet";
 import { useTasks } from "@/hooks/useTasks";
+import { generateDailyRemindersAction } from "@/actions/reminder-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -46,6 +47,21 @@ export default function DashboardPage() {
   // Charger les notifications (annonces) pour l'utilisateur connecté
   useEffect(() => {
     if (!user) return;
+    // 🔔 Générer les rappels quotidiens (tâches du jour + passage plan supérieur)
+    // pour l'utilisateur connecté — une seule fois par jour (localStorage +
+    // déduplication anti-spam côté base de données).
+    try {
+      const lastReminder = localStorage.getItem("rewardly_last_reminder");
+      const today = new Date().toISOString().slice(0, 10);
+      if (lastReminder !== today) {
+        generateDailyRemindersAction().finally(() => {
+          localStorage.setItem("rewardly_last_reminder", today);
+        });
+      }
+    } catch (e) {
+      /* localStorage indisponible : on ignore */
+    }
+
     const supabase = createClient();
     if (!supabase) return;
 

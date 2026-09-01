@@ -1,41 +1,28 @@
-﻿-- ============================================================
--- RÉINITIALISATION COMPLÈTE DE LA PLATEFORME REWARDLY
--- ⚠️ À EXÉCUTER UNE SEULE FOIS AVANT LE LANCEMENT
+-- ============================================================
+-- RESET DOUX - Réinitialise UNIQUEMENT les données d'activité
+-- ⚠️ CONSERVE : utilisateurs, plans, tâches, catégories, PACKS (investissements)
 --
--- ✅ ROBUSTE : chaque suppression est conditionnée à l'existence
---    de la table (to_regclass). Si une table manque (ex: investments
---    non créée), le script continue sans erreur.
+-- ✅ But :
+--   · Remet TOUS les compteurs financiers à 0 (wallets)
+--   · Supprime les activités réalisées (transactions, dépôts, retraits,
+--     soumissions de tâches, parrainages, commandes services, notifications)
+--   · CONSERVE les packs actifs (investissements) → pas besoin de racheter
 --
--- Ce script remet tous les compteurs à zéro ET supprime :
---   • Balances des wallets → 0
---   • Gains totaux → 0
---   • Toutes les transactions → supprimées
---   • Tous les dépôts / retraits → supprimés
---   • Toutes les soumissions de tâches → supprimées
---   • Tous les parrainages → supprimés
---   • Toutes les commandes services → supprimées
---   • Toutes les notifications → supprimées
---   • Toutes les TÂCHES → supprimées
---   • Tous les PLANS → supprimés
---   • Toutes les CATÉGORIES → supprimées
---   • Tous les CHAMPS DE SOUMISSION → supprimés
---
--- ⚠️ CONSERVE :
---   • Les utilisateurs (profiles + auth.users)
---   • Les préférences (user_preferences)
---   • Les paramètres (system_settings)
+-- ✅ ROBUSTE : chaque suppression est conditionnée à l'existence de la table
+--   (to_regclass) et à l'existence de la colonne (information_schema).
+--   Aucune erreur même si une table/colonne manque.
 -- ============================================================
 
 begin;
 
 -- ============================================================
--- 1. SUPPRIMER LES EXTRAITS FINANCIERS
+-- 1. SUPPRIMER LES EXTRAITS D'ACTIVITÉ FINANCIÈRE
 -- ============================================================
 
 -- Supprimer les transactions de wallet
 do $$
 begin
-  if to_regclass(''public.wallet_transactions'') is not null then
+  if to_regclass('public.wallet_transactions') is not null then
     delete from public.wallet_transactions;
   end if;
 end $$;
@@ -43,7 +30,7 @@ end $$;
 -- Supprimer les retraits
 do $$
 begin
-  if to_regclass(''public.withdrawals'') is not null then
+  if to_regclass('public.withdrawals') is not null then
     delete from public.withdrawals;
   end if;
 end $$;
@@ -51,27 +38,18 @@ end $$;
 -- Supprimer les dépôts
 do $$
 begin
-  if to_regclass(''public.deposits'') is not null then
+  if to_regclass('public.deposits') is not null then
     delete from public.deposits;
   end if;
 end $$;
 
--- Supprimer les investissements
+-- ⚠️ INVESTISSEMENTS (PACKS) : CONSERVÉS — aucune suppression.
+-- Les utilisateurs gardent leur pack actif (pas de rachat demandé).
+
+-- Supprimer les réponses de soumission (activité liée aux gains)
 do $$
 begin
-  if to_regclass(''public.investments'') is not null then
-    delete from public.investments;
-  end if;
-end $$;
-
--- ============================================================
--- 2. SUPPRIMER L'ACTIVITÉ DES TÂCHES
--- ============================================================
-
--- Supprimer les réponses de soumission
-do $$
-begin
-  if to_regclass(''public.submission_answers'') is not null then
+  if to_regclass('public.submission_answers') is not null then
     delete from public.submission_answers;
   end if;
 end $$;
@@ -79,157 +57,172 @@ end $$;
 -- Supprimer les soumissions de tâches
 do $$
 begin
-  if to_regclass(''public.task_submissions'') is not null then
+  if to_regclass('public.task_submissions') is not null then
     delete from public.task_submissions;
   end if;
 end $$;
 
--- ============================================================
--- 3. SUPPRIMER LE PARRAINAGE
--- ============================================================
-
+-- Supprimer les parrainages (liés aux commissions)
 do $$
 begin
-  if to_regclass(''public.referrals'') is not null then
+  if to_regclass('public.referrals') is not null then
     delete from public.referrals;
   end if;
 end $$;
 
--- Réinitialiser referred_by dans les profils
+-- Réinitialiser referred_by (UNIQUEMENT si la colonne existe)
 do $$
 begin
-  if to_regclass(''public.profiles'') is not null then
-    update public.profiles
-    set referred_by = null;
+  if to_regclass('public.profiles') is not null
+     and exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'profiles'
+         and column_name = 'referred_by'
+     ) then
+    update public.profiles set referred_by = null;
   end if;
 end $$;
-
--- ============================================================
--- 4. SUPPRIMER LES COMMANDES DE SERVICES
--- ============================================================
-
+-- Supprimer les commandes de services
 do $$
 begin
-  if to_regclass(''public.service_orders'') is not null then
+  if to_regclass('public.service_orders') is not null then
     delete from public.service_orders;
   end if;
 end $$;
 
--- ============================================================
--- 5. SUPPRIMER LES NOTIFICATIONS
--- ============================================================
-
+-- Supprimer les notifications
 do $$
 begin
-  if to_regclass(''public.notifications'') is not null then
+  if to_regclass('public.notifications') is not null then
     delete from public.notifications;
   end if;
 end $$;
--- ============================================================
--- 6. SUPPRIMER LES TÂCHES ET LEURS STRUCTURES
--- ============================================================
 
--- Supprimer les champs de soumission
+-- ============================================================
+-- 2. RÉINITIALISER LES WALLETS À ZÉRO
+-- ============================================================
+-- 💪 ROBUSTE : chaque colonne est vérifiée via information_schema.
+-- Les anciennes bases n'ont pas invested_capital / total_earnings /
+-- locked_amount → on met à jour UNIQUEMENT les colonnes présentes
+-- (balance + updated_at existent dans toutes les versions).
+
 do $$
+declare
+  v_has_invested boolean;
+  v_has_total_earnings boolean;
+  v_has_locked boolean;
 begin
-  if to_regclass(''public.submission_fields'') is not null then
-    delete from public.submission_fields;
+  if to_regclass('public.wallets') is null then
+    return;
   end if;
-end $$;
 
--- Supprimer les tâches
-do $$
-begin
-  if to_regclass(''public.tasks'') is not null then
-    delete from public.tasks;
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'wallets'
+      and column_name = 'invested_capital'
+  ) into v_has_invested;
+
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'wallets'
+      and column_name = 'total_earnings'
+  ) into v_has_total_earnings;
+
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'wallets'
+      and column_name = 'locked_amount'
+  ) into v_has_locked;
+
+  -- Toujours présent dans toutes les versions :
+  update public.wallets set balance = 0, updated_at = now();
+
+  if v_has_invested then
+    update public.wallets set invested_capital = 0;
   end if;
-end $$;
-
--- Supprimer les catégories de tâches
-do $$
-begin
-  if to_regclass(''public.task_categories'') is not null then
-    delete from public.task_categories;
+  if v_has_total_earnings then
+    update public.wallets set total_earnings = 0;
   end if;
-end $$;
-
--- ============================================================
--- 7. SUPPRIMER LES PLANS
--- ============================================================
-
-do $$
-begin
-  if to_regclass(''public.plans'') is not null then
-    delete from public.plans;
-  end if;
-end $$;
-
--- ============================================================
--- 8. RÉINITIALISER LES WALLETS À ZÉRO
--- ============================================================
-
-do $$
-begin
-  if to_regclass(''public.wallets'') is not null then
-    update public.wallets
-    set
-      balance = 0,
-      invested_capital = 0,
-      total_earnings = 0,
-      locked_amount = 0,
-      updated_at = now();
+  if v_has_locked then
+    update public.wallets set locked_amount = 0;
   end if;
 end $$;
 
 -- ============================================================
--- 9. RÉINITIALISER LES SESSIONS (facultatif - déconnecte tout le monde)
+-- 3. VÉRIFICATION (compteurs à zéro + tables conservées)
 -- ============================================================
+-- 💪 100 % ROBUSTE : chaque table est vérifiée via to_regclass AVANT
+-- d'être interrogée (FORMAT/EXECUTE dynamique). Une table absente est
+-- simplement signalée, JAMAIS une erreur — le script n'échoue plus.
 
--- Déconnecter toutes les sessions utilisateurs (optionnel, commenter si non souhaité)
--- delete from auth.sessions;
+do $$
+declare
+  v_tables text[] := array[
+    'wallets', 'wallet_transactions', 'deposits', 'withdrawals',
+    'task_submissions', 'submission_answers', 'referrals',
+    'service_orders', 'notifications'
+  ];
+  v_conserved text[] := array[
+    'plans', 'tasks', 'task_categories', 'profiles', 'investments'
+  ];
+  v_t text;
+  v_count bigint;
+begin
+  raise notice '=== ACTIVITÉ (doit être 0 / VIDE) ===';
+  foreach v_t in array v_tables
+  loop
+    if to_regclass('public.' || v_t) is not null then
+      execute format('select count(*) from public.%I', v_t) into v_count;
+      raise notice '   % : %', v_t, v_count;
+    else
+      raise notice '   % : TABLE ABSENTE (ignorée)', v_t;
+    end if;
+  end loop;
+
+  -- Solde total des wallets (si la colonne balance existe)
+  if to_regclass('public.wallets') is not null and exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'wallets'
+      and column_name = 'balance'
+  ) then
+    execute 'select coalesce(sum(balance), 0) from public.wallets' into v_count;
+    raise notice '   wallets.balance (total) : %', v_count;
+  end if;
+
+  raise notice '=== CONSERVÉS (ne doivent pas être 0) ===';
+  foreach v_t in array v_conserved
+  loop
+    if to_regclass('public.' || v_t) is not null then
+      execute format('select count(*) from public.%I', v_t) into v_count;
+      raise notice '   % : %', v_t, v_count;
+    else
+      raise notice '   % : TABLE ABSENTE (à créer via consolidated_schema)', v_t;
+    end if;
+  end loop;
+end $$;
 
 -- ============================================================
--- 10. VÉRIFICATION APRÈS RÉINITIALISATION
+-- 4. DIAGNOSTIC : TABLES ATTENDUES MANQUANTES
 -- ============================================================
+do $$
+declare
+  v_missing text := '';
+begin
+  if to_regclass('public.wallets') is null then v_missing := v_missing || 'wallets, '; end if;
+  if to_regclass('public.wallet_transactions') is null then v_missing := v_missing || 'wallet_transactions, '; end if;
+  if to_regclass('public.deposits') is null then v_missing := v_missing || 'deposits, '; end if;
+  if to_regclass('public.withdrawals') is null then v_missing := v_missing || 'withdrawals, '; end if;
+  if to_regclass('public.investments') is null then v_missing := v_missing || 'investments, '; end if;
+  if to_regclass('public.task_submissions') is null then v_missing := v_missing || 'task_submissions, '; end if;
+  if to_regclass('public.referrals') is null then v_missing := v_missing || 'referrals, '; end if;
+  if to_regclass('public.service_orders') is null then v_missing := v_missing || 'service_orders, '; end if;
+  if to_regclass('public.notifications') is null then v_missing := v_missing || 'notifications, '; end if;
 
--- Afficher les totaux après reset (doit afficher 0 partout)
-select 'wallets' as table_name, count(*) as count, coalesce(sum(balance), 0) as total_balance
-from public.wallets
-union all
-select ''wallet_transactions'', count(*), 0
-from public.wallet_transactions
-union all
-select ''deposits'', count(*), 0
-from public.deposits
-union all
-select ''withdrawals'', count(*), 0
-from public.withdrawals
-union all
-select ''task_submissions'', count(*), 0
-from public.task_submissions
-union all
-select ''referrals'', count(*), 0
-from public.referrals
-union all
-select ''service_orders'', count(*), 0
-from public.service_orders
-union all
-select ''notifications'', count(*), 0
-from public.notifications
-union all
-select ''tasks (supprimées)'', count(*), 0
-from public.tasks
-union all
-select ''plans (supprimés)'', count(*), 0
-from public.plans
-union all
-select ''task_categories (supprimées)'', count(*), 0
-from public.task_categories
-union all
-select ''submission_fields (supprimés)'', count(*), 0
-from public.submission_fields
-union all
-select ''profiles (utilisateurs conservés)'', count(*), 0
-from public.profiles;
+  if v_missing = '' then
+    raise notice '✅ Toutes les tables financières attendues existent.';
+  else
+    raise notice '⚠️ Tables manquantes : % — exécutez le schéma consolidé (consolidated_schema.sql) pour les créer.', v_missing;
+  end if;
+end $$;
 
 commit;
