@@ -184,11 +184,13 @@ export function useTasks() {
       }
 
       // Fetch tasks from database
+      // 📌 Ordre chronologique : la tâche postée EN PREMIER s'affiche en
+      // PREMIER (created_at ASC), puis la suivante, etc.
       const { data: tasksData, error: tasksError } = await supabase
         .from("tasks")
         .select("*, plans(name, slug, daily_tasks)")
         .eq("is_active", true)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: true });
 
       if (!tasksError && tasksData) {
         const normalizedTasks = (tasksData as Array<any>).map((task) => ({

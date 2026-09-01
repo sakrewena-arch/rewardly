@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Copy, Share2, Users, Gift, Check, Link2, MessageCircle, Send } from "lucide-react";
+import { ArrowLeft, Copy, Share2, Users, Gift, Check, Link2, MessageCircle, Send, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, getAppBaseUrl } from "@/lib/utils";
@@ -185,6 +185,41 @@ export default function ReferralPage() {
         </Card>
       </motion.div>
 
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <h3 className="font-semibold">Affiche de parrainage</h3>
+            <p className="text-xs text-[#8A8A8A]">
+              Partagez cette image pour parrainer facilement vos amis.
+            </p>
+            <div className="flex flex-col items-center">
+              {/* Affiche responsive : max 260px de large → compacte, ne prend pas trop d'espace */}
+              <img
+                src="/images/parrainage.png"
+                alt="Affiche de parrainage Rewardly"
+                className="w-full max-w-[260px] h-auto rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm object-contain"
+                loading="lazy"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  const link = document.createElement("a");
+                  link.href = "/images/parrainage.png";
+                  link.download = "affiche-parrainage-rewardly.png";
+                  link.click();
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" /> Télécharger l&apos;affiche
+              </Button>
+              <Button variant="outline" onClick={copyLink}>
+                {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
         <Card>
           <CardContent className="p-5 space-y-3">

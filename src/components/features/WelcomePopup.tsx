@@ -79,63 +79,45 @@ export default function WelcomePopup() {
   };
 
   // ============================================================
-  // TÉLÉCHARGEMENT DIRECT SELON LA PLATEFORME
+  // INSTALLATION DE LA WEBVIEW (PWA) — directement, sans APK/EXE.
+  // Le bouton "Télécharger" installe l'application (WebView / PWA)
+  // sur l'appareil via le navigateur, sur toutes les plateformes.
   // ============================================================
   const handleDownload = async () => {
-    setDownloading(true);
-    setDownloadError(null);
-    try {
-      const platform = detectPlatform();
-
-      const res = await fetch("/api/releases");
-      const data: ReleasesData = await res.json();
-
-      let asset: ReleaseAsset | undefined;
-      if (platform === "android") {
-        asset = data.android?.[0];
-      } else if (platform === "windows") {
-        asset = data.windows?.[0];
-      } else if (platform === "linux") {
-        asset = data.linux?.[0];
-      } else if (platform === "macos") {
-        asset = data.macos?.[0];
-      }
-
-      if (asset?.downloadUrl) {
-        const a = document.createElement("a");
-        a.href = asset.downloadUrl;
-        a.download = asset.name;
-        a.style.display = "none";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setDownloading(false);
-        return;
-      }
-
-      // Pas d'asset natif pour cette plateforme :
-      //  - iOS → instructions PWA (pas d'IPA hors App Store)
-      //  - Autre → tentative d'installation PWA DIRECTE (beforeinstallprompt)
-      //    sinon fallback vers la page /download.
-      if (platform === "ios") {
-        setDownloadError("Sur iPhone/iPad : menu Partager puis Sur l'écran d'accueil pour installer Rewardly.");
-      } else {
+      setDownloading(true);
+      setDownloadError(null);
+      try {
         if (isPWAInstalled) {
-          setDownloadError("L'application est déjà installée sur cet appareil.");
-        } else {
-          const res = await installPWA();
-          if (!res.installed && !res.needsIOSInstructions) {
-            router.push("/download");
-          }
+          setDownloadError("L'application est déjà installée sur cet appareil. ✅");
+          setDownloading(false);
+          return;
         }
+
+        const result = await installPWA();
+
+        if (result.installed) {
+          setDownloading(false);
+          return;
+        }
+
+        if (result.needsIOSInstructions) {
+          setDownloadError(
+            "Sur iPhone/iPad : appuyez sur Partager (⤴) puis « Sur l'écran d'accueil » pour installer Rewardly."
+          );
+          setDownloading(false);
+          return;
+        }
+
+        // beforeinstallprompt non disponible → guide vers la page /download
+        // qui contient les instructions d'installation pour chaque navigateur.
+        router.push("/download");
+        setDownloading(false);
+      } catch (e) {
+        console.error("Install error:", e);
+        setDownloadError("Impossible d'installer l'application. Réessayez plus tard.");
+        setDownloading(false);
       }
-      setDownloading(false);
-    } catch (e) {
-      console.error("Download error:", e);
-      setDownloadError("Impossible de récupérer les installateurs. Réessayez plus tard.");
-      setDownloading(false);
-    }
-  };
+    };
 
   const platform = detectPlatform();
   const platformLabel =
@@ -234,7 +216,7 @@ export default function WelcomePopup() {
               <div className="p-6 space-y-3">
                 <h2 className="font-semibold text-center mb-2">Que voulez-vous faire ?</h2>
 
-                {/* Bouton 1 - Télécharger l'app (détection plateforme + téléchargement direct) */}
+                {/* Bouton 1 - Installer l'application WebView / PWA */}
                 <button
                   onClick={handleDownload}
                   disabled={downloading}
@@ -253,10 +235,10 @@ export default function WelcomePopup() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm">
-                      {downloading ? "Préparation du téléchargement..." : "Télécharger l'application native"}
+                      {downloading ? "Installation en cours..." : "Installer l'application"}
                     </p>
                     <p className="text-xs text-[#8A8A8A] mt-0.5 break-words">
-                      {downloading ? "Patientez un instant..." : `Détecté : ${platformLabel} • Téléchargement direct`}
+                      {downloading ? "Patientez un instant..." : `Sur ${platformLabel} • Installation directe (WebView)`}
                     </p>
                   </div>
                   {!downloading && <Download className="w-5 h-5 text-purple-600 flex-shrink-0" />}
