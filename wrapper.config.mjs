@@ -11,7 +11,7 @@
 
 export const APP_NAME = "Rewardly";
 export const APP_ID = "com.rewardly.app";
-export const APP_URL = process.env.WRAPPER_APP_URL || "https://rewardlyfree.vercel.app";
+export const APP_URL = process.env.WRAPPER_APP_URL || "https://rewardly.website";
 
 // Dossier de sortie web pour Capacitor (fallback local de chargement/offline)
 export const WEB_DIR = "dist";

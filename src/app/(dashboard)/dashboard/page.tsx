@@ -567,11 +567,13 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-semibold text-sm">{task.title}</h3>
-                          <p className="text-xs text-[#8A8A8A] mt-0.5">{task.description}</p>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-sm truncate-2">{task.title}</h3>
+                          {task.description && (
+                            <p className="text-xs text-[#8A8A8A] mt-0.5 truncate-2 text-safe">{task.description}</p>
+                          )}
                         </div>
-                        <span className="text-sm font-bold text-green-500 whitespace-nowrap">
+                        <span className="text-sm font-bold text-green-500 whitespace-nowrap flex-shrink-0">
                           +{formatCurrency(task.amount)}
                         </span>
                       </div>

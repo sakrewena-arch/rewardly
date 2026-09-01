@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Bell, CheckCheck, Gift, Wallet, TrendingUp, Shield, MessageCircle } from "lucide-react";
+import { ArrowLeft, Bell, CheckCheck, Gift, Wallet, TrendingUp, Shield, MessageCircle, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -94,6 +94,23 @@ export default function NotificationsPage() {
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
+  // Extraire un éventuel lien [LINK]url[/LINK] présent dans le message
+  const parseLink = (message: string): { text: string; url: string | null } => {
+    const match = message.match(/\[LINK\]([^\]]*)\[\/LINK\]/);
+    if (match) {
+      return {
+        text: message.replace(/\[LINK\][^\]]*\[\/LINK\]/g, "").trim(),
+        url: match[1].trim(),
+      };
+    }
+    return { text: message, url: null };
+  };
+
+  const normalizeUrl = (url: string): string => {
+    if (/^https?:\/\//i.test(url)) return url;
+    return `https://${url}`;
+  };
+
   return (
     <div className="max-w-lg mx-auto px-4 pt-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -153,16 +170,27 @@ export default function NotificationsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className={`text-sm font-medium ${notification.is_read ? "text-[#8A8A8A]" : ""}`}>
+                        <h3 className={`text-sm font-medium truncate-2 ${notification.is_read ? "text-[#8A8A8A]" : ""}`}>
                           {notification.title}
                         </h3>
-                        <span className="text-xs text-[#8A8A8A] whitespace-nowrap">
+                        <span className="text-xs text-[#8A8A8A] whitespace-nowrap flex-shrink-0">
                           {formatDate(notification.created_at, "relative")}
                         </span>
                       </div>
-                      <p className={`text-sm mt-0.5 ${notification.is_read ? "text-[#8A8A8A]" : "text-[#111111] dark:text-white"}`}>
-                        {notification.message}
+                      <p className={`text-sm mt-0.5 text-safe break-words ${notification.is_read ? "text-[#8A8A8A]" : "text-[#111111] dark:text-white"}`}>
+                        {parseLink(notification.message).text}
                       </p>
+                      {parseLink(notification.message).url && (
+                        <a
+                          href={normalizeUrl(parseLink(notification.message).url!)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => markRead(notification.id)}
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-purple-600 hover:text-purple-700"
+                        >
+                          Voir le lien <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
                   </div>
                 </button>

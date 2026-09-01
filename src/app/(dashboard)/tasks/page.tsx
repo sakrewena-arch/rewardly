@@ -8,12 +8,10 @@ import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useTasks } from "@/hooks/useTasks";
-import { useWallet } from "@/hooks/useWallet";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { submitTaskAction } from "@/actions/user-actions";
 import { getTaskFields } from "@/actions/admin-actions";
-import { createClient } from "@/lib/supabase/client";
 import { useNav } from "@/context/NavContext";
 
 const availablePlans = [
@@ -35,7 +33,6 @@ export default function TasksPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { tasks, allTasks, investment, isLoading, hasPack, userPlanSlug, dailyLimit, isUnlimited, completedToday, totalPlanTasks, completeTask, addSubmission, allTasksCompleted } = useTasks();
-  const { addReward } = useWallet();
   const [search, setSearch] = useState("");
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState<string | null>(null);
@@ -262,8 +259,12 @@ export default function TasksPage() {
   const handleComplete = async (taskId: string, amount: number, title: string) => {
     setCompletingId(taskId);
     await new Promise((r) => setTimeout(r, 1000));
-    
-    // Use the RPC to create a submission + credit the wallet atomically
+
+    // ✅ Crédit UNIQUEMENT via la RPC submit_task (atomique côté serveur :
+    //    vérifie pack actif, anti-double soumission, limite quotidienne,
+    //    puis crédite le wallet + crée la transaction).
+    //    Plus AUCUN fallback de crédit direct côté client (RLS désormais
+    //    verrouillée) — on évite ainsi tout crédit injustifié ou double crédit.
     const result = await submitTaskAction(taskId, {});
     if (result?.success || result?.auto_approved) {
       // RPC succeeded - submission + wallet credited
@@ -274,57 +275,13 @@ export default function TasksPage() {
       setShowSuccess(taskId);
       setTimeout(() => setShowSuccess(null), 3000);
     } else {
-      // Fallback: create submission + transaction + credit wallet directly via API
+      // RPC échouée (pack expiré, limite atteinte, déjà accomplie...) →
+      // on affiche l'erreur au lieu de créditer manuellement.
       console.error("submitTaskAction failed:", result?.error);
-      try {
-        const supabase = createClient();
-        if (supabase && user) {
-          // 1. Create submission (approved for auto tasks)
-          const { data: subData } = await supabase
-            .from("task_submissions")
-            .insert({ user_id: user.id, task_id: taskId, status: "approved" })
-            .select()
-            .single();
-
-          // 2. Get wallet
-          const { data: walletData } = await supabase
-            .from("wallets")
-            .select("*")
-            .eq("user_id", user.id)
-            .single();
-
-          if (walletData) {
-            // 3. Update wallet balance + earnings
-            await supabase
-              .from("wallets")
-              .update({
-                balance: (walletData.balance || 0) + amount,
-                total_earnings: (walletData.total_earnings || 0) + amount,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("user_id", user.id);
-
-            // 4. Create transaction
-            await supabase.from("wallet_transactions").insert({
-              user_id: user.id,
-              wallet_id: walletData.id,
-              amount,
-              type: "reward",
-              description: `Récompense : ${title}`,
-              status: "completed",
-            });
-          }
-        }
-      } catch (e) {
-        console.error("Fallback credit failed:", e);
-      }
-      // Also try addReward as last resort
-      await addReward(amount, `Récompense : ${title}`);
-      await completeTask(taskId);
+      setSubmitError(result?.error || "Impossible de valider cette tâche. Veuillez réessayer.");
       setCompletingId(null);
       setConfirmingId(null);
-      setShowSuccess(taskId);
-      setTimeout(() => setShowSuccess(null), 3000);
+      setTimeout(() => setSubmitError(null), 5000);
     }
   };
 
@@ -557,11 +514,13 @@ export default function TasksPage() {
                     <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center text-xl flex-shrink-0">{task.icon || "📋"}</div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="font-semibold text-sm">{task.title}</h3>
-                          <p className="text-xs text-[#8A8A8A] mt-0.5">{task.description}</p>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-sm truncate-2">{task.title}</h3>
+                          {task.description && (
+                            <p className="text-xs text-[#8A8A8A] mt-0.5 truncate-2 text-safe">{task.description}</p>
+                          )}
                         </div>
-                        <span className="text-sm font-bold text-green-500 whitespace-nowrap">+{formatCurrency(task.amount)}</span>
+                        <span className="text-sm font-bold text-green-500 whitespace-nowrap flex-shrink-0">+{formatCurrency(task.amount)}</span>
                       </div>
                       <div className="flex items-center gap-3 mt-3">
                         {task.estimated_time && <span className="flex items-center gap-1 text-xs text-[#8A8A8A]"><Clock className="w-3 h-3" /> {task.estimated_time} min</span>}
@@ -905,14 +864,16 @@ export default function TasksPage() {
                 <>
                   <div className="bg-purple-50 dark:bg-purple-500/10 rounded-xl p-4 mb-4">
                     <div className="flex items-center gap-3">
-                      <span className="text-2xl">{task.icon || "📋"}</span>
-                      <div>
-                        <h3 className="font-semibold">{task.title}</h3>
-                        <p className="text-xs text-[#8A8A8A]">{task.description}</p>
+                      <span className="text-2xl flex-shrink-0">{task.icon || "📋"}</span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold truncate-2">{task.title}</h3>
+                        {task.description && (
+                          <p className="text-xs text-[#8A8A8A] truncate-2 text-safe">{task.description}</p>
+                        )}
                       </div>
                     </div>
                     {task.instructions && (
-                      <p className="text-sm mt-3 bg-white dark:bg-white/5 p-3 rounded-lg">{task.instructions}</p>
+                      <p className="text-sm mt-3 bg-white dark:bg-white/5 p-3 rounded-lg text-safe max-h-40 overflow-y-auto">{task.instructions}</p>
                     )}
                     {task.link && (
                       <a href={normalizeUrl(task.link)} target="_blank" rel="noopener noreferrer" className="text-sm text-purple-500 flex items-center gap-1 mt-2">

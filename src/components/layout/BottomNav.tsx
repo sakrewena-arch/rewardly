@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Home, CheckSquare, BarChart3, User, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,10 +15,18 @@ const navItems = [
   { href: "/profile", label: "Profil", icon: User },
 ];
 
+// Seuil de réduction de la viewport indiquant qu'un clavier virtuel est ouvert.
+// Sur mobile le clavier réduit visualViewport.height d'environ 40%+ de l'écran.
+const KEYBOARD_SHRINK_PX = 120;
+
 export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { navHidden, navAutoHidden, showNav, toggleNav } = useNav();
+  const { navHidden, navAutoHidden, showNav, hideNav, toggleNav } = useNav();
+  // État dédié au clavier : la barre est masquée tant que le clavier est ouvert,
+  // indépendamment du masquage manuel/auto (popups). À la fermeture du clavier,
+  // la barre revient à son état précédent.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   // S'assurer que la barre réapparaît à chaque changement de page
   // (au cas où elle serait restée masquée après la fermeture d'un popup).
@@ -26,14 +34,63 @@ export function BottomNav() {
     showNav();
   }, [pathname, showNav]);
 
+  // 📱 Détection du clavier virtuel via visualViewport :
+  // quand le clavier s'ouvre, la hauteur utile de la fenêtre diminue fortement.
+  // On masque la barre de navigation sinon elle flotte au-dessus du clavier.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    // Hauteur de référence : la PLUS GRANDE valeur observée. Quand la fenêtre
+    // s'agrandit (clavier fermé / rotation), la référence suit ; quand elle
+    // rétrécit fortement, c'est que le clavier est ouvert.
+    let maxHeight = vv.height;
+
+    const onResize = () => {
+      if (vv.height > maxHeight) maxHeight = vv.height;
+      setKeyboardOpen(maxHeight - vv.height > KEYBOARD_SHRINK_PX);
+    };
+
+    const onScroll = () => onResize();
+
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onScroll);
+
+    // Si l'utilisateur tape dans un input, le clavier est probablement ouvert :
+    // fallback pour les navigateurs sans visualViewport fiable.
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        setKeyboardOpen(true);
+      }
+    };
+    const onFocusOut = () => {
+      // Laisse resize (plus fiable) décider ; petit délai pour laisser le clavier se fermer.
+      setTimeout(() => setKeyboardOpen(false), 150);
+    };
+
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onScroll);
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
+
+  // Combiner : la barre est invisible si masquée manuellement/auto OU si le clavier est ouvert.
+  const isHidden = navHidden || keyboardOpen;
+
   return (
     <>
       {/* Barre de navigation (animee : glisse vers le bas quand masquee) */}
       <motion.div
         initial={false}
-        animate={{ x: "-50%", y: navHidden ? 190 : 0, opacity: navHidden ? 0 : 1 }}
+        animate={{ x: "-50%", y: isHidden ? 190 : 0, opacity: isHidden ? 0 : 1 }}
         transition={{ type: "spring", stiffness: 300, damping: 32 }}
-        style={{ pointerEvents: navHidden ? "none" : "auto" }}
+        style={{ pointerEvents: isHidden ? "none" : "auto" }}
         className="fixed bottom-6 left-1/2 z-50"
       >
         <div className="flex items-center gap-1 bg-black dark:bg-black rounded-[100px] px-2 py-2 shadow-lg shadow-black/20 relative">
@@ -89,8 +146,9 @@ export function BottomNav() {
         </div>
       </motion.div>
 
-      {/* Bouton flottant qui fait remonter la barre (masquage manuel uniquement) */}
-      {navHidden && !navAutoHidden && (
+      {/* Bouton flottant qui fait remonter la barre (masquage manuel uniquement,
+          JAMAIS quand le clavier est ouvert ni en masquage auto de popup) */}
+      {navHidden && !navAutoHidden && !keyboardOpen && (
         <motion.button
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

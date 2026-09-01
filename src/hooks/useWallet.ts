@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { computeWithdrawableAmount } from "@/lib/utils";
 
 interface Wallet {
   id: string;
@@ -100,13 +99,18 @@ export function useWallet() {
   }, [user, fetchWallet]);
 
   // ============================================================
-  // CALCUL DU MONTANT RETIRABLE (via RPC serveur)
+  // CALCUL DU MONTANT RETIRABLE
   // ============================================================
   // SEULS LES GAINS (rewards/bonus/referrals) sont retirables,
   // PAS les dépôts ni le capital investi.
   //
-  // Le calcul est fait côté serveur via la RPC get_withdrawable_amount
-  // pour garantir la cohérence avec la logique SQL de submit_withdrawal.
+  // Formule (identique au SQL, volontairement indépendante de la version
+  // de la RPC installée en base) :
+  //   retirable = total_earnings
+  //             - retraits déjà payés (transactions withdrawal completed)
+  //             - retraits pending/approuvés
+  //             - paiements de services
+  //   jamais négatif.
   // ============================================================
   const [withdrawableAmount, setWithdrawableAmount] = useState(0);
 
@@ -118,37 +122,51 @@ export function useWallet() {
     }
 
     try {
-      // 1. Montant retirable via la RPC (gains bruts)
-      const { data } = await supabase.rpc("get_withdrawable_amount", {
-        p_user_id: user.id,
-      });
+      // 1. Wallet → total_earnings (gains bruts)
+      const { data: walletData } = await supabase
+        .from("wallets")
+        .select("total_earnings")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      const totalEarnings = Number((walletData as any)?.total_earnings || 0);
 
-      // 2. Soustraire les retraits en attente (pending) du montant retirable
+      // 2. Retraits DÉJÀ PAYÉS (transactions de type withdrawal terminées)
+      const { data: paidWithdrawals } = await supabase
+        .from("wallet_transactions")
+        .select("amount")
+        .eq("user_id", user.id)
+        .eq("type", "withdrawal")
+        .eq("status", "completed");
+      const paidAmount = (paidWithdrawals || []).reduce(
+        (sum: number, w: any) => sum + Math.abs(Number(w.amount) || 0),
+        0
+      );
+
+      // 3. Retraits en attente / approuvés (à déduire aussi)
       const { data: pendingWithdrawals } = await supabase
         .from("withdrawals")
         .select("amount")
         .eq("user_id", user.id)
         .in("status", ["pending", "approved"]);
+      const pendingAmount = (pendingWithdrawals || []).reduce(
+        (sum: number, w: any) => sum + (Number(w.amount) || 0),
+        0
+      );
 
-      const pendingAmount = (pendingWithdrawals || []).reduce((sum: number, w: any) => sum + (w.amount || 0), 0);
-
-      // 3. Soustraire les paiements de services (montants négatifs) du montant retirable
+      // 4. Paiements de services (montants négatifs → valeur absolue)
       const { data: servicePayments } = await supabase
         .from("wallet_transactions")
         .select("amount")
         .eq("user_id", user.id)
         .eq("type", "service");
+      const serviceAmount = (servicePayments || []).reduce(
+        (sum: number, t: any) => sum + Math.abs(Number(t.amount) || 0),
+        0
+      );
 
-      const serviceAmount = (servicePayments || []).reduce((sum: number, t: any) => sum + Math.abs(t.amount || 0), 0);
-
-      // 4. Le montant retirable = gains bruts - retraits en attente - paiements services
-      const raw = Number(data?.withdrawable_amount) || 0;
-      const withdrawable = computeWithdrawableAmount({
-        rawWithdrawable: raw,
-        pendingWithdrawals: pendingAmount,
-        servicePayments: serviceAmount,
-      });
-      setWithdrawableAmount(withdrawable);
+      // 5. Gains bruts - tout ce qui est déjà engagé / sorti
+      const raw = totalEarnings - paidAmount - pendingAmount - serviceAmount;
+      setWithdrawableAmount(Math.max(0, raw));
     } catch (error) {
       console.error("Error fetching withdrawable amount:", error);
       setWithdrawableAmount(0);

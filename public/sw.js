@@ -3,7 +3,7 @@
    Permet l'installation de l'application sur Android/iOS/Windows
    ============================================================ */
 
-const CACHE_NAME = "rewardly-v1";
+const CACHE_NAME = "rewardly-v2";
 const APP_SHELL = [
   "/",
   "/manifest.json",
@@ -13,6 +13,7 @@ const APP_SHELL = [
   "/deposit",
   "/withdraw",
   "/profile",
+  "/offline",
 ];
 
 // Installation : précache les fichiers essentiels
@@ -55,9 +56,9 @@ self.addEventListener("fetch", (event) => {
         // Fallback au cache si hors ligne
         return caches.match(event.request).then((cached) => {
           if (cached) return cached;
-          // Fallback pour les navigations
+          // Fallback pour les navigations → page « hors ligne »
           if (event.request.mode === "navigate") {
-            return caches.match("/");
+            return caches.match("/offline");
           }
           return new Response("", { status: 404 });
         });

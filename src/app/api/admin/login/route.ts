@@ -1,4 +1,4 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
@@ -6,14 +6,12 @@ export const ADMIN_SESSION_COOKIE = "admin_session";
 
 /**
  * Route API pour le login admin.
- * Utilise @supabase/supabase-js directement (pas createServerClient)
- * car ce dernier ne fonctionne pas correctement dans les Route Handlers.
- * Évite aussi le logging des credentials par les Server Actions.
+ * Utilise @supabase/ssr pour PERSISTER la session Supabase dans les cookies :
+ * les Server Actions admin (requireAdmin) peuvent ainsi vérifier l'identité
+ * du compte via auth.getUser() — le cookie admin_session seul ne suffit plus.
  *
- * Le cookie admin_session est une valeur simple "true" avec httpOnly.
- * httpOnly empêche JavaScript de le lire/modifier (protection XSS).
- * La réelle vérification du rôle admin se fait à l'authentification
- * et via la session Supabase.
+ * Le cookie admin_session (httpOnly) est posé UNIQUEMENT si le compte
+ * connecté possède le rôle admin/super_admin.
  */
 export async function POST(request: Request) {
   try {
@@ -46,10 +44,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Client direct (fiable dans les Route Handlers)
-    const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+    // Réponse créée AVANT pour pouvoir poser les cookies de session dans setAll
+    const response = NextResponse.json({ success: true });
 
-    // Se connecter via Supabase Auth
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          const cookieHeader = request.headers.get("cookie") || "";
+          return cookieHeader.split(";").map((c) => {
+            const [name, ...rest] = c.trim().split("=");
+            return { name: name || "", value: decodeURIComponent(rest.join("=") || "") };
+          }).filter((c) => c.name);
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    });
+
+    // Se connecter via Supabase Auth → la session est persistée dans les cookies
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -64,23 +79,14 @@ export async function POST(request: Request) {
 
     const user = data.user;
 
-    // Vérifier le rôle admin dans profiles (service role)
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceKey) {
-      return NextResponse.json(
-        { error: "Service role non configuré" },
-        { status: 500 }
-      );
-    }
-    const adminClient = createSupabaseClient(supabaseUrl, serviceKey);
-    const { data: profile } = await adminClient
+    // Vérifier le rôle admin (lecture via la session de l'utilisateur)
+    const { data: profile } = await supabase
       .from("profiles")
       .select("role")
       .eq("user_id", user.id)
       .single();
 
-    const isAdmin =
-      profile?.role === "admin" || profile?.role === "super_admin";
+    const isAdmin = profile?.role === "admin" || profile?.role === "super_admin";
 
     if (!isAdmin) {
       return NextResponse.json(
@@ -89,8 +95,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Poser le cookie admin dans la réponse (httpOnly → non modifiable par JS)
-    const response = NextResponse.json({ success: true });
+    // Poser le cookie admin (httpOnly → non modifiable par JS)
     response.cookies.set(ADMIN_SESSION_COOKIE, "true", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -98,9 +103,6 @@ export async function POST(request: Request) {
       path: "/",
       maxAge: 60 * 60 * 8, // 8 heures
     });
-
-    // Déconnecter le client anon pour ne pas laisser de session
-    await supabase.auth.signOut();
 
     return response;
   } catch (error: any) {

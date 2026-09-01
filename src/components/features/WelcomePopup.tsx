@@ -1,20 +1,53 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, Megaphone, Coins, CheckCircle, FileText, Shield, X } from "lucide-react";
+import { Download, Megaphone, Coins, CheckCircle, FileText, X, Loader2, Smartphone, Monitor, Apple } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STORAGE_KEY = "rewardly_welcome_accepted";
 
+// ============================================================
+// DÉTECTION DE PLATEFORME + TÉLÉCHARGEMENT DIRECT
+// ============================================================
+type Platform = "android" | "ios" | "windows" | "linux" | "macos" | "other";
+
+function detectPlatform(): Platform {
+  if (typeof navigator === "undefined") return "other";
+  const ua = navigator.userAgent || "";
+  const platform = (navigator as any).platform || "";
+
+  if (/android/i.test(ua)) return "android";
+  if (/iphone|ipad|ipod/i.test(ua)) return "ios";
+  if (/windows|win32|win64/i.test(ua) || /win/i.test(platform)) return "windows";
+  if (/mac os x|macintosh|macppc/i.test(ua) || /mac/i.test(platform)) return "macos";
+  if (/linux/i.test(ua) || /linux/i.test(platform)) return "linux";
+
+  return "other";
+}
+
+interface ReleaseAsset {
+  name: string;
+  size: number;
+  downloadUrl: string;
+}
+
+interface ReleasesData {
+  android: ReleaseAsset[];
+  windows: ReleaseAsset[];
+  linux: ReleaseAsset[];
+  macos: ReleaseAsset[];
+  error?: string;
+}
 export default function WelcomePopup() {
   const router = useRouter();
   const [show, setShow] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [step, setStep] = useState<"accept" | "options">("accept");
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Afficher le popup UNIQUEMENT à la première visite
     if (typeof window === "undefined") return;
     const acceptedDone = localStorage.getItem(STORAGE_KEY);
     if (!acceptedDone) {
@@ -22,7 +55,6 @@ export default function WelcomePopup() {
     }
   }, []);
 
-  // Bloquer le scroll de l'arrière-plan quand le popup est ouvert
   useEffect(() => {
     if (show) {
       document.body.style.overflow = "hidden";
@@ -43,6 +75,64 @@ export default function WelcomePopup() {
   const handleClose = () => {
     setShow(false);
   };
+
+  // ============================================================
+  // TÉLÉCHARGEMENT DIRECT SELON LA PLATEFORME
+  // ============================================================
+  const handleDownload = async () => {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const platform = detectPlatform();
+
+      const res = await fetch("/api/releases");
+      const data: ReleasesData = await res.json();
+
+      let asset: ReleaseAsset | undefined;
+      if (platform === "android") {
+        asset = data.android?.[0];
+      } else if (platform === "windows") {
+        asset = data.windows?.[0];
+      } else if (platform === "linux") {
+        asset = data.linux?.[0];
+      } else if (platform === "macos") {
+        asset = data.macos?.[0];
+      }
+
+      if (asset?.downloadUrl) {
+        const a = document.createElement("a");
+        a.href = asset.downloadUrl;
+        a.download = asset.name;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setDownloading(false);
+        return;
+      }
+
+      // Pas d'asset pour cette plateforme → fallback vers la page /download
+      if (platform === "ios" || platform === "other") {
+        router.push("/download");
+      } else {
+        setDownloadError("Aucun installateur disponible pour votre plateforme pour le moment.");
+      }
+      setDownloading(false);
+    } catch (e) {
+      console.error("Download error:", e);
+      setDownloadError("Impossible de récupérer les installateurs. Réessayez plus tard.");
+      setDownloading(false);
+    }
+  };
+
+  const platform = detectPlatform();
+  const platformLabel =
+    platform === "android" ? "Android" :
+    platform === "ios" ? "iOS" :
+    platform === "windows" ? "Windows" :
+    platform === "linux" ? "Linux" :
+    platform === "macos" ? "macOS" : "votre appareil";
 
   return (
     <AnimatePresence>
@@ -84,73 +174,45 @@ export default function WelcomePopup() {
                   <FileText className="w-5 h-5 text-purple-500" /> Conditions d'utilisation
                 </h2>
 
-                {/* Conditions scrollables */}
                 <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 max-h-56 overflow-y-auto text-sm space-y-3">
                   <p className="text-[#8A8A8A] leading-relaxed">
                     <strong className="text-[#111111] dark:text-white">1. Comment Rewardly fonctionne</strong><br />
-                    Rewardly est une plateforme de micro-tâches rémunérées. Des <strong>entreprises et des annonceurs paient Rewardly</strong> pour diffuser leurs publicités (visites de sites, sondages, tests d'applications, de jeux, d'IA, partages). C'est grâce à ces revenus publicitaires que nous pouvons <strong>rémunérer les utilisateurs</strong> qui accomplissent ces tâches.
+                    Rewardly est une plateforme de micro-tâches rémunérées. Des <strong>entreprises</strong> publient des missions (visites de sites, partages, questionnaires...), et vous êtes <strong>récompensé</strong> pour chaque tâche accomplie.
                   </p>
                   <p className="text-[#8A8A8A] leading-relaxed">
-                    <strong className="text-[#111111] dark:text-white">2. Pourquoi payer pour activer un pack ?</strong><br />
-                    L'activation d'un pack (Bronze, Silver, Gold) est un <strong>engagement de motivation</strong>. Elle garantit que seuls les utilisateurs sérieux et actifs participent aux campagnes publicitaires. Les entreprises paient pour des résultats réels — un utilisateur qui a investi est plus susceptible d'accomplir ses tâches sérieusement. Le montant du pack est <strong>réinvesti dans votre propre récompense</strong> : plus le pack est élevé, plus les tâches sont rémunératrices et nombreuses.
+                    <strong className="text-[#111111] dark:text-white">2. Vos gains</strong><br />
+                    Chaque tâche validée crédite votre <strong>solde Rewardly</strong>. Vous pouvez ensuite <strong>retirer vos gains</strong> via Mobile Money (Orange, MTN, Wave...) selon les conditions en vigueur.
                   </p>
                   <p className="text-[#8A8A8A] leading-relaxed">
-                    <strong className="text-[#111111] dark:text-white">3. Tâches rémunérées</strong><br />
-                    Rewardly propose des micro-tâches rémunérées (visites, sondages, tests, partages). Chaque tâche accomplie selon les instructions vous crédite le montant indiqué. Les gains proviennent directement des budgets publicitaires des entreprises.
+                    <strong className="text-[#111111] dark:text-white">3. Utilisation responsable</strong><br />
+                    Une seule tâche par compte. Toute tentative de fraude (multi-comptes, bots, fausses preuves) entraîne la <strong>suspension définitive</strong> du compte et la perte des gains.
                   </p>
                   <p className="text-[#8A8A8A] leading-relaxed">
                     <strong className="text-[#111111] dark:text-white">4. Retraits</strong><br />
-                    Les gains sont versés sur votre wallet. Les retraits sont soumis à un montant minimum et aux conditions de la plateforme. Vous pouvez retirer vos gains via mobile money (MTN, Orange, Wave, etc.).
+                    Les retraits sont traités sous <strong>24-48h</strong> après validation. Un montant minimum peut s'appliquer.
                   </p>
                   <p className="text-[#8A8A8A] leading-relaxed">
-                    <strong className="text-[#111111] dark:text-white">5. Fraude</strong><br />
-                    Toute tentative de fraude (multi-comptes, exploitation de bugs, fausses preuves) entraîne le bannissement définitif et la confiscation des gains.
-                  </p>
-                  <p className="text-[#8A8A8A] leading-relaxed">
-                    <strong className="text-[#111111] dark:text-white">6. Responsabilité</strong><br />
-                    Rewardly n'est pas responsable des pertes liées aux investissements. Investissez prudemment et uniquement ce que vous pouvez vous permettre.
+                    <strong className="text-[#111111] dark:text-white">5. Données personnelles</strong><br />
+                    Vos données sont utilisées uniquement pour le fonctionnement de la plateforme. Elles ne sont <strong>jamais vendues</strong> à des tiers.
                   </p>
                 </div>
 
-                {/* Politique de confidentialité */}
-                <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 text-sm">
-                  <p className="flex items-center gap-2 font-medium mb-2">
-                    <Shield className="w-4 h-4 text-purple-500" /> Politique de confidentialité
-                  </p>
-                  <p className="text-[#8A8A8A] leading-relaxed">
-                    <strong>1. Données collectées</strong> : Nous collectons vos informations personnelles (nom, email, téléphone) pour gérer votre compte, vos gains et vos retraits.
-                  </p>
-                  <p className="text-[#8A8A8A] leading-relaxed mt-2">
-                    <strong>2. Utilisation des données</strong> : Vos données servent uniquement au fonctionnement de la plateforme (authentification, paiements, notifications). Nous ne vendons jamais vos données personnelles à des tiers.
-                  </p>
-                  <p className="text-[#8A8A8A] leading-relaxed mt-2">
-                    <strong>3. Données des campagnes</strong> : Lorsque vous accomplissez une tâche publicitaire, certaines informations (comme votre participation) peuvent être partagées avec l'annonceur pour valider la campagne, sans jamais révéler vos coordonnées personnelles.
-                  </p>
-                  <p className="text-[#8A8A8A] leading-relaxed mt-2">
-                    <strong>4. Sécurité</strong> : Vos données sont protégées par un chiffrement et des mesures de sécurité avancées. Seuls les administrateurs autorisés y ont accès.
-                  </p>
-                  <p className="text-[#8A8A8A] leading-relaxed mt-2">
-                    <strong>5. Vos droits</strong> : Vous pouvez demander la suppression de votre compte et de vos données à tout moment en nous contactant.
-                  </p>
-                </div>
-
-                {/* Checkbox */}
-                <label className="flex items-start gap-3 cursor-pointer">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={accepted}
                     onChange={(e) => setAccepted(e.target.checked)}
-                    className="w-5 h-5 mt-0.5 rounded border-gray-300 accent-purple-600"
+                    className="mt-1 w-4 h-4 accent-purple-600"
                   />
-                  <span className="text-sm">
-                    J'ai lu et j'accepte les <strong>conditions d'utilisation</strong> et la <strong>politique de confidentialité</strong>
+                  <span className="text-sm text-[#8A8A8A]">
+                    J'accepte les <strong>conditions d'utilisation</strong> et la <strong>politique de confidentialité</strong>
                   </span>
                 </label>
 
                 <button
                   onClick={handleAccept}
                   disabled={!accepted}
-                  className="w-full py-3 rounded-xl bg-purple-600 text-white font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-purple-600 text-white font-semibold hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                 >
                   <CheckCircle className="w-5 h-5" />
                   J'accepte et je continue
@@ -161,45 +223,65 @@ export default function WelcomePopup() {
               <div className="p-6 space-y-3">
                 <h2 className="font-semibold text-center mb-2">Que voulez-vous faire ?</h2>
 
-                {/* Bouton 1 - Télécharger l'app (page dédiée native) */}
+                {/* Bouton 1 - Télécharger l'app (détection plateforme + téléchargement direct) */}
                 <button
-                  onClick={() => router.push("/download")}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-purple-200 dark:border-purple-500/20 bg-purple-50 dark:bg-purple-500/10 hover:border-purple-500 transition-all text-left"
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-purple-200 dark:border-purple-500/20 bg-purple-50 dark:bg-purple-500/10 hover:border-purple-500 transition-all text-left active:scale-[0.98] disabled:opacity-60"
                 >
                   <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                    <Download className="w-5 h-5 text-purple-600" />
+                    {downloading ? (
+                      <Loader2 className="w-5 h-5 text-purple-600 animate-spin" />
+                    ) : platform === "android" ? (
+                      <Smartphone className="w-5 h-5 text-purple-600" />
+                    ) : platform === "ios" ? (
+                      <Apple className="w-5 h-5 text-purple-600" />
+                    ) : (
+                      <Monitor className="w-5 h-5 text-purple-600" />
+                    )}
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">Télécharger l'application native</p>
-                    <p className="text-xs text-[#8A8A8A] mt-0.5">Android • iOS • Windows</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm">
+                      {downloading ? "Préparation du téléchargement..." : "Télécharger l'application native"}
+                    </p>
+                    <p className="text-xs text-[#8A8A8A] mt-0.5 break-words">
+                      {downloading ? "Patientez un instant..." : `Détecté : ${platformLabel} • Téléchargement direct`}
+                    </p>
                   </div>
+                  {!downloading && <Download className="w-5 h-5 text-purple-600 flex-shrink-0" />}
                 </button>
+
+                {downloadError && (
+                  <p className="text-xs text-red-500 bg-red-50 dark:bg-red-500/10 p-2 rounded-lg break-words">
+                    {downloadError}
+                  </p>
+                )}
 
                 {/* Bouton 2 - Nous contacter pour publicités */}
                 <button
                   onClick={() => router.push("/services")}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 hover:border-rose-500 transition-all text-left"
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 hover:border-rose-500 transition-all text-left active:scale-[0.98]"
                 >
                   <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-500/20 flex items-center justify-center flex-shrink-0">
                     <Megaphone className="w-5 h-5 text-rose-600" />
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm">Nous contacter pour vos publicités</p>
-                    <p className="text-xs text-[#8A8A8A] mt-0.5">Promouvez votre entreprise, site web, application</p>
+                    <p className="text-xs text-[#8A8A8A] mt-0.5 break-words">Promouvez votre entreprise, site web, application</p>
                   </div>
                 </button>
 
                 {/* Bouton 3 - Commencer à gagner */}
                 <button
                   onClick={handleClose}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-green-200 dark:border-green-500/20 bg-green-50 dark:bg-green-500/10 hover:border-green-500 transition-all text-left"
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-green-200 dark:border-green-500/20 bg-green-50 dark:bg-green-500/10 hover:border-green-500 transition-all text-left active:scale-[0.98]"
                 >
                   <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-500/20 flex items-center justify-center flex-shrink-0">
                     <Coins className="w-5 h-5 text-green-600" />
                   </div>
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm">Commencer à gagner de l'argent</p>
-                    <p className="text-xs text-[#8A8A8A] mt-0.5">Accéder aux tâches rémunérées</p>
+                    <p className="text-xs text-[#8A8A8A] mt-0.5 break-words">Accéder aux tâches rémunérées</p>
                   </div>
                 </button>
               </div>

@@ -7,12 +7,15 @@ import { useEffect } from "react";
  * - Enregistre le token de push (FCM / APNs) auprès du serveur via la
  *   Server Action registerPushTokenAction (table public.push_tokens).
  * - Ajuste la status bar pour correspondre au thème de l'app.
+ * - Intercepte le bouton retour natif : navigation arrière si possible,
+ *   sinon RETOUR À L'ACCUEIL ANDROID (minimizeApp) au lieu de quitter l'app.
  * Ne s'exécute QUE dans une WebView Capacitor ; sur le web classique,
  * ce composant ne fait rien (Capacitor.isNativePlatform() === false).
  */
 export function NativeCapacitor() {
   useEffect(() => {
     let disposed = false;
+    let backHandler: { remove: () => void } | null = null;
 
     const init = async () => {
       try {
@@ -20,6 +23,26 @@ export function NativeCapacitor() {
         if (!Capacitor.isNativePlatform()) return;
 
         const platform = Capacitor.getPlatform(); // "android" | "ios"
+
+        // ---------- Bouton retour natif (Android) ----------
+        // L'app Next.js est une SPA : même quand la WebView n'a qu'UNE page,
+        // l'historique interne SPA (window.history.length > 1) doit permettre
+        // de revenir aux pages précédentes visitées dans l'app.
+        // Sinon → on minimise l'app (retour à l'accueil Android) au lieu de
+        // la fermer/la faire sembler "planter".
+        try {
+          const { App } = await import("@capacitor/app");
+          backHandler = await App.addListener("backButton", ({ canGoBack }) => {
+            if (disposed) return;
+            if (canGoBack || window.history.length > 1) {
+              window.history.back();
+            } else {
+              App.minimizeApp();
+            }
+          });
+        } catch {
+          /* @capacitor/app non disponible : comportement par défaut conservé */
+        }
 
         // ---------- Status bar ----------
         try {
@@ -96,6 +119,12 @@ export function NativeCapacitor() {
     init();
     return () => {
       disposed = true;
+      // Retirer le listener backButton proprement à la destruction du composant.
+      try {
+        backHandler?.remove?.();
+      } catch {
+        /* ignore */
+      }
     };
   }, []);
 

@@ -71,9 +71,22 @@ export default function DepositPage() {
         });
         const data = await response.json();
         // Afficher le statut en temps réel
-        if (data.status === "SUCCESSFUL") {
+        // ⚠️ On n'affiche le succès QUE si le crédit côté serveur a réellement
+        // été effectué (credited === true). Si FeeXPay dit SUCCESSFUL mais que
+        // le crédit a échoué côté serveur, on le signale à l'utilisateur.
+        if (data.status === "SUCCESSFUL" && data.credited === true) {
           setPolling(false);
           setStep(4);
+          cancelled = true;
+          return;
+        } else if (data.status === "SUCCESSFUL" && !data.credited) {
+          // Paiement accepté par FeeXPay mais crédit serveur non confirmé :
+          // l'utilisateur doit contacter le support (le dépôt est bien reçu).
+          setPolling(false);
+          setError(
+            "Votre paiement a été reçu mais le crédit est en cours de vérification. " +
+            "Si le solde n'apparaît pas d'ici quelques minutes, contactez le support en précisant votre référence."
+          );
           cancelled = true;
           return;
         } else if (data.status === "FAILED") {

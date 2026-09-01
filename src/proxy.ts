@@ -21,9 +21,10 @@ export async function proxy(request: NextRequest) {
   // ============================================================
   const isAdminPage = pathname.startsWith("/admin");
   const isMaintenancePage = pathname.startsWith("/maintenance");
+  const isOfflinePage = pathname.startsWith("/offline");
   const isStaticFile = pathname.startsWith("/_next") || pathname.startsWith("/images") || /\.(svg|png|jpg|jpeg|gif|webp|jfif)$/.test(pathname);
 
-  if (!isAdminPage && !isMaintenancePage && !isStaticFile) {
+  if (!isAdminPage && !isMaintenancePage && !isOfflinePage && !isStaticFile) {
     try {
       // Vérifier le mode maintenance (fetch direct vers Supabase REST)
       const maintenanceResponse = await fetch(

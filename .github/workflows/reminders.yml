@@ -1,0 +1,17 @@
+name: Reminders Cron
+
+on:
+  schedule:
+    # Toutes les 2 heures (décalé pour éviter les pics)
+    - cron: "17 */2 * * *"
+  workflow_dispatch: # Permet de déclencher manuellement depuis l'onglet Actions
+
+jobs:
+  send-reminders:
+    name: Envoyer les notifications de rappel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appeler la route cron des rappels
+        run: |
+          curl -fsS "${{ secrets.NEXT_PUBLIC_APP_URL }}/api/notifications/reminders?secret=${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: rewardly-cron" || echo "Cron failed (non bloquant)"

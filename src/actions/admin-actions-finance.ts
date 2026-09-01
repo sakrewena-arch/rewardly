@@ -117,13 +117,18 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
     return { success: false, error: "Retrait introuvable" };
   }
 
-  // 2. Si passage à "paid" → déclencher le payout FeeXPay
+  // 2. Transition invalide : un retrait déjà payé/refusé ne peut plus changer
+  if (withdrawal.status === "paid" || withdrawal.status === "rejected") {
+    return { success: false, error: `Ce retrait est déjà ${withdrawal.status === "paid" ? "payé" : "refusé"}` };
+  }
+
+  // 3. Passage à "paid" → initier d'ABORD le payout FeeXPay, puis valider via RPC.
+  //    Ordre sûr : le payout est lancé UNE seule fois et la RPC ne change le statut
+  //    que si la transition est autorisée (pending/approved → paid).
   if (status === "paid") {
     try {
-      // Initier le payout FeeXPay
       const { initiatePayout } = await import("@/lib/feexpay");
       const accountInfo = withdrawal.account_info || "";
-      // Extraire le réseau et le téléphone
       const network = withdrawal.method || "MTN";
       const fullPhone = accountInfo.replace(/\D/g, "");
 
@@ -135,33 +140,69 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
         callbackInfo: `withdrawal_${withdrawal.id}`,
       });
 
+      // Payout lancé → valider la transition (crédite locked_amount, clôture la txn)
+      const { data, error } = await supabase.rpc("validate_withdrawal", {
+        p_withdrawal_id: withdrawalId,
+        p_admin_id: admin.id,
+        p_status: "paid",
+        p_comment: comment || null,
+      });
+
+      if (error) {
+        console.error("validate_withdrawal (paid) error:", error.message);
+        return { success: false, error: `Le paiement FeeXPay est parti mais la validation a échoué : ${error.message}` };
+      }
+
       // Mettre à jour la référence FeeXPay
       await supabase
         .from("withdrawals")
         .update({ feexpay_reference: withdrawal.id, updated_at: new Date().toISOString() })
         .eq("id", withdrawalId);
+
+      revalidatePath("/admin/withdrawals");
+      return data;
     } catch (e: any) {
       console.error("Payout error:", e);
       // Si le payout échoue (solde insuffisant, etc.) → approuver le retrait
-      // et informer l'admin qu'il doit payer manuellement
-      await supabase.rpc("validate_withdrawal", {
+      // (pas "paid") pour que l'admin puisse réessayer sans risquer un double paiement.
+      const { data: approvedData, error: approvedError } = await supabase.rpc("validate_withdrawal", {
         p_withdrawal_id: withdrawalId,
         p_admin_id: admin.id,
         p_status: "approved",
         p_comment: comment || "Payout FeeXPay échoué - à payer manuellement",
       });
+
+      if (approvedError) {
+        console.error("validate_withdrawal (approved fallback) error:", approvedError.message);
+        return { success: false, error: "Le retrait n'a ni pu être payé ni approuvé. Contactez le support." };
+      }
+
       revalidatePath("/admin/withdrawals");
       return {
-        success: false,
-        error: `Paiement FeeXPay échoué : ${e.message || "Erreur inconnue"}. Le retrait a été approuvé - veuillez payer l'utilisateur manuellement.`,
+        success: true,
         approved: true,
+        message: `Paiement FeeXPay échoué : ${e.message || "Erreur inconnue"}. Le retrait a été approuvé - veuillez payer l'utilisateur manuellement.`,
       };
     }
   }
 
-  // 3. Si rejet → rembourser la BALANCE TOTALE (pas seulement le retirable)
+  // 4. Rejet : valider d'ABORD la transition via la RPC (elle refuse
+  //    approved→rejected et marque la transaction de débit comme `failed`),
+  //    puis SEULEMENT rembourser la balance si la transition a réussi.
   if (status === "rejected") {
-    // Récupérer le wallet de l'utilisateur
+    const { data: rpcData, error: rpcError } = await supabase.rpc("validate_withdrawal", {
+      p_withdrawal_id: withdrawalId,
+      p_admin_id: admin.id,
+      p_status: "rejected",
+      p_comment: comment || null,
+    });
+
+    if (rpcError) {
+      console.error("validate_withdrawal (rejected) error:", rpcError.message);
+      return { success: false, error: rpcError.message };
+    }
+
+    // La RPC a réussi → rembourser la balance (le montant avait été débité à la demande)
     const { data: wallet } = await supabase
       .from("wallets")
       .select("*")
@@ -169,7 +210,6 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
       .single();
 
     if (wallet) {
-      // Rembourser le montant sur la balance totale
       await supabase
         .from("wallets")
         .update({
@@ -178,7 +218,6 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
         })
         .eq("user_id", withdrawal.user_id);
 
-      // Créer la transaction de remboursement
       await supabase
         .from("wallet_transactions")
         .insert({
@@ -190,9 +229,12 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
           status: "completed",
         });
     }
+
+    revalidatePath("/admin/withdrawals");
+    return rpcData;
   }
 
-  // 4. Mettre à jour le statut en base via la RPC
+  // 5. Autres statuts (ex: "approved" direct) → simple RPC
   const { data } = await supabase.rpc("validate_withdrawal", {
     p_withdrawal_id: withdrawalId,
     p_admin_id: admin.id,

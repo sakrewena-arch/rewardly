@@ -13,6 +13,11 @@
 - Dépôts et retraits
 - Parrainage avec code et lien de parrainage
 - Notifications en temps réel (compteur non-lues)
+- Notifications de rappel automatiques (tâches du jour, upgrade de plan, dépôts en attente)
+- Popup de bienvenue avec téléchargement direct selon la plateforme détectée (Android/Windows/Linux/macOS)
+- Page hors ligne `/offline` avec détection de connexion
+- Barre de navigation auto-masquée quand le clavier virtuel s'ouvre
+- Bouton retour natif Android intelligent (navigation arrière sinon retour à l'accueil)
 - Analytics et statistiques avec graphiques
 - Mode sombre/clair
 - Sécurité du compte (changement de mot de passe)
@@ -53,7 +58,7 @@ Rewardly peut être empaqueté en apps installables :
 - **Windows** (`exe` NSIS + portable), **Linux** (`AppImage`/`deb`), **macOS** (`dmg`) : **Electron**
 
 > ✅ **Guide complet & commandes : [WRAPPER_GUIDE.md](./WRAPPER_GUIDE.md)**
-> ⚠️ L'URL de production est `https://rewardlyfree.vercel.app` (dans `wrapper.config.mjs`).
+> ⚠️ L'URL de production est `https://rewardly.website` (dans `wrapper.config.mjs`).
 
 ### 🔐 Signature Android (Release / Play Store)
 
