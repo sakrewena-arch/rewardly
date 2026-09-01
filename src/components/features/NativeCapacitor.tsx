@@ -29,13 +29,34 @@ export function NativeCapacitor() {
         // Dans une WebView Capacitor, un lien target="_blank" ou une redirection
         // vers un autre domaine DELEGUE au navigateur système (Chrome), ce qui fait
         // "sortir" l'app. On capture :
-        //  1. window.open → redirige via le plugin Browser
-        //  2. clics sur <a target="_blank"> → redirige via le plugin Browser
-        // Les URLs de MÊME ORIGINE restent dans la WebView.
+        //  1. window.open → gardé en interne si domaine app, sinon Browser
+        //  2. clics sur <a target="_blank"> → idem
+        // Les URLs des domaines de l'app restent DANS la WebView, même si le
+        // domaine a changé (ancien Vercel + nouveau rewardly.website).
         try {
+          // Domaines considérés comme INTERNES à l'app (jamais Chrome).
+          const APP_DOMAINS = ["rewardly.website", "rewardlyfree.vercel.app", "localhost", "127.0.0.1"];
+
+          const isInternalDomain = (hostname: string) => {
+            const h = hostname.toLowerCase();
+            return (
+              h === window.location.hostname ||
+              APP_DOMAINS.some((d) => h === d || h.endsWith("." + d))
+            );
+          };
+
           const openExternal = (url: string) => {
-            const u = new URL(url, window.location.href);
-            if (u.origin === window.location.origin) return false;
+            let u: URL;
+            try {
+              u = new URL(url, window.location.href);
+            } catch {
+              return false;
+            }
+            // URL interne → reste dans la WebView (aucune délégation).
+            if (isInternalDomain(u.hostname)) return false;
+            if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+            // URL vraiment externe → ouvre dans la Custom Tab (genre navigateur),
+            // jamais dans l'app.
             void import("@capacitor/browser").then(({ Browser }) => {
               Browser.open({ url: u.href }).catch(() => {
                 window.location.href = u.href;
