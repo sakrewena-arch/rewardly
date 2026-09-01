@@ -12,15 +12,26 @@ const RESOLVED_URL =
 // Important après un CHANGEMENT DE NOM DE DOMAINE : l'ancien domaine
 // (Vercel) et le nouveau (rewardly.website) sont tous deux considérés
 // comme "internes" à l'app → aucune délégation à Chrome.
+// "*.domain" couvre aussi les sous-domaines (www., app., cdn., …).
 const APP_HOSTS = (() => {
   const hosts = new Set<string>();
   for (const url of [RESOLVED_URL, APP_URL, "https://rewardly.website", "https://rewardlyfree.vercel.app"]) {
     try {
-      hosts.add(new URL(url).hostname);
+      const host = new URL(url).hostname;
+      hosts.add(host);
+      hosts.add("*." + host);
     } catch {
       /* URL invalide : ignorée */
     }
   }
+  // Toujours garder aussi le domaine "nu" et ses sous-domaines.
+  for (const d of ["rewardly.website", "rewardlyfree.vercel.app"]) {
+    hosts.add(d);
+    hosts.add("*." + d);
+  }
+  // Debug local (USB) & émulateur Android.
+  hosts.add("localhost");
+  hosts.add("10.0.2.2");
   return [...hosts];
 })();
 

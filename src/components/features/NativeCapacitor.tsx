@@ -86,7 +86,14 @@ export function NativeCapacitor() {
           // 1. Intercepter window.open natif de la WebView
           const nativeWindowOpen = window.open;
           window.open = function (url?: string | URL, target?: string, features?: string) {
-            const urlStr = url?.toString() || "";
+            // Certaines libs (OAuth, popups, téléchargements) appellent
+            // window.open() SANS argument puis écrivent dans la référence.
+            // Dans ce cas, on ne peut pas décider de l'externalité → on
+            // laisse faire le comportement natif (sinon ces libs cassent).
+            if (!url) {
+              return nativeWindowOpen?.call(window, url, target, features) ?? null;
+            }
+            const urlStr = url.toString();
             if (openExternal(urlStr)) return null;
             return nativeWindowOpen?.call(window, url, target, features) ?? null;
           };
