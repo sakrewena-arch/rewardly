@@ -198,20 +198,42 @@ export default function HistoryPage() {
         </div>
       )}
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {periods.map((period) => (
-          <button
-            key={period.key}
-            onClick={() => setFilterPeriod(period.key)}
-            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-              filterPeriod === period.key
-                ? "bg-purple-600 text-white"
-                : "bg-white dark:bg-[#161616] text-[#8A8A8A] hover:bg-gray-50 dark:hover:bg-white/5"
-            }`}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-[#8A8A8A] font-medium mb-1 block">Période</label>
+          <select
+            value={filterPeriod}
+            onChange={(e) => setFilterPeriod(e.target.value as FilterPeriod)}
+            className="w-full h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161616] px-3 text-sm font-medium appearance-none cursor-pointer"
+            aria-label="Filtrer par période"
           >
-            {period.label}
-          </button>
-        ))}
+            {periods.map((period) => (
+              <option key={period.key} value={period.key}>{period.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-[#8A8A8A] font-medium mb-1 block">Type</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as FilterType)}
+            className="w-full h-11 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#161616] px-3 text-sm font-medium appearance-none cursor-pointer"
+            aria-label="Filtrer par type"
+          >
+            {[
+              { key: "all", label: "Tout" },
+              { key: "reward", label: "Gains" },
+              { key: "deposit", label: "Dépôts" },
+              { key: "withdrawal", label: "Retraits" },
+              { key: "investment", label: "Investissements" },
+              { key: "pending", label: "En attente" },
+              { key: "approved", label: "Validées" },
+              { key: "rejected", label: "Refusées" },
+            ].map((type) => (
+              <option key={type.key} value={type.key}>{type.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="relative">
@@ -222,31 +244,6 @@ export default function HistoryPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
         />
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {[
-          { key: "all", label: "Tous" },
-          { key: "reward", label: "Gains" },
-          { key: "deposit", label: "Dépôts" },
-          { key: "withdrawal", label: "Retraits" },
-          { key: "investment", label: "Investissements" },
-          { key: "pending", label: "En attente" },
-          { key: "approved", label: "Validées" },
-          { key: "rejected", label: "Refusées" },
-        ].map((type) => (
-          <button
-            key={type.key}
-            onClick={() => setStatusFilter(type.key as FilterType)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
-              statusFilter === type.key
-                ? "bg-purple-100 dark:bg-purple-500/20 text-purple-600"
-                : "bg-gray-100 dark:bg-gray-800 text-[#8A8A8A]"
-            }`}
-          >
-            {type.label}
-          </button>
-        ))}
       </div>
 
       <Card>

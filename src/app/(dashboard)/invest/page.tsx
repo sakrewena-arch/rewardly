@@ -11,6 +11,7 @@ import { activatePlanAction } from "@/actions/user-actions";
 import { getPlans as getPlansFromServer } from "@/actions/admin-actions";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/hooks/useWallet";
+import { useTasks } from "@/hooks/useTasks";
 import { InvestAuth } from "@/components/features/AuthRequiredPages";
 
 const plansData: Record<string, any> = {
@@ -35,6 +36,7 @@ function InvestContent() {
   const [planId, setPlanId] = useState<string | null>(null);
   const { user } = useAuth();
   const { wallet, isLoading: walletLoading } = useWallet();
+  const { investment } = useTasks();
 
   // Fetch real plan from database
   useEffect(() => {
@@ -52,9 +54,15 @@ function InvestContent() {
     return <InvestAuth />;
   }
 
-  // Check if user has enough balance for the plan
+  // Vérifier si l'utilisateur a déjà un pack actif → calcul du montant d'upgrade
+  const currentInvestment = investment?.amount || 0;
+  const isUpgrade = currentInvestment > 0;
+  // Montant réel à payer : la DIFFÉRENCE (jamais le prix total si déjà investi)
+  const amountToPay = isUpgrade ? Math.max(0, plan.price - currentInvestment) : plan.price;
+
+  // Check if user has enough balance (pour la différence à payer)
   const balance = wallet?.balance || 0;
-  const hasEnoughBalance = balance >= plan.price;
+  const hasEnoughBalance = balance >= amountToPay;
 
   const handleActivate = async () => {
     if (!user) {
@@ -66,7 +74,7 @@ function InvestContent() {
       return;
     }
     if (!hasEnoughBalance) {
-      setError(`Solde insuffisant. Ce pack nécessite ${formatCurrency(plan.price)}.`);
+      setError(`Solde insuffisant. Pour passer au pack ${plan.name}, il vous manque ${formatCurrency(amountToPay - balance)}.`);
       return;
     }
 
@@ -74,7 +82,7 @@ function InvestContent() {
     setSubmitting(true);
 
     try {
-      const result = await activatePlanAction(planId, plan.price);
+      const result = await activatePlanAction(planId, amountToPay);
       if (result?.success) {
         setShowSuccess(true);
         setTimeout(() => { router.push("/dashboard"); }, 1500);
@@ -169,6 +177,25 @@ function InvestContent() {
                     </span>
                   </div>
 
+                  {/* Montant réel à débiter (différence si upgrade) */}
+                  {isUpgrade && (
+                    <div className={`flex items-center justify-between p-3 rounded-xl ${
+                      hasEnoughBalance
+                        ? "bg-purple-50 dark:bg-purple-500/10"
+                        : "bg-red-50 dark:bg-red-500/10"
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <Wallet className={`w-4 h-4 ${hasEnoughBalance ? "text-purple-500" : "text-red-500"}`} />
+                        <span className={`text-sm ${hasEnoughBalance ? "text-purple-700 dark:text-purple-300" : "text-red-700 dark:text-red-300"}`}>
+                          À payer (upgrade)
+                        </span>
+                      </div>
+                      <span className={`text-sm font-bold ${hasEnoughBalance ? "text-purple-500" : "text-red-500"}`}>
+                        {formatCurrency(amountToPay)}
+                      </span>
+                    </div>
+                  )}
+
                   {!hasEnoughBalance && (
                     <Button
                       className="w-full"
@@ -205,7 +232,7 @@ function InvestContent() {
               disabled={submitting || !hasEnoughBalance || !user || walletLoading}
             >
               <Sparkles className="w-5 h-5 mr-2" />
-              {submitting ? "Activation en cours..." : `Activer (${formatCurrency(plan.price)})`}
+              {submitting ? "Activation en cours..." : isUpgrade ? `Passer au pack ${plan.name} (${formatCurrency(amountToPay)})` : `Activer (${formatCurrency(amountToPay)})`}
             </Button>
             <Button className="w-full" size="sm" variant="ghost" onClick={() => router.push("/dashboard")}>Retour à l'accueil</Button>
           </motion.div>

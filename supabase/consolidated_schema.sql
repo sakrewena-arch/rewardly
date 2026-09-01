@@ -526,6 +526,21 @@ END $$;
 -- ============================================================
 CREATE POLICY "Users can view own profile" ON profiles
   FOR SELECT USING (auth.uid() = user_id);
+-- 🔧 Un utilisateur peut voir le profil de SES filleuls et de SON parrain
+-- (nécessaire pour afficher les noms dans les pages Parrainage / Profil).
+CREATE POLICY "Users can view referral-linked profiles" ON profiles
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM referrals r
+      WHERE (
+        -- Je suis le parrain → voir mes filleuls
+        (r.referrer_id = auth.uid() AND r.referred_id = profiles.user_id)
+        OR
+        -- Je suis le filleul → voir mon parrain
+        (r.referred_id = auth.uid() AND r.referrer_id = profiles.user_id)
+      )
+    )
+  );
 CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = user_id);
 -- NOTE SÉCURITÉ : l'insertion de profil est limitée au rôle 'user' par défaut.
@@ -650,6 +665,10 @@ CREATE POLICY "Admins can manage notifications" ON notifications
 -- ============================================================
 CREATE POLICY "Users can view own referrals" ON referrals
   FOR SELECT USING (auth.uid() = referrer_id OR auth.uid() = referred_id);
+CREATE POLICY "Users can insert own referrals" ON referrals
+  FOR INSERT WITH CHECK (auth.uid() = referrer_id);
+CREATE POLICY "Users can update own referrals" ON referrals
+  FOR UPDATE USING (auth.uid() = referrer_id OR auth.uid() = referred_id);
 CREATE POLICY "Admins can view all referrals" ON referrals
   FOR SELECT USING (is_admin());
 
@@ -2210,10 +2229,7 @@ BEGIN
     RETURNING id, balance INTO v_wallet_id, v_balance;
   END IF;
 
-  IF v_balance < p_amount THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Insufficient balance');
-  END IF;
-IF EXISTS (SELECT 1 FROM investments WHERE user_id = p_user_id AND status = 'active') THEN
+  IF EXISTS (SELECT 1 FROM investments WHERE user_id = p_user_id AND status = 'active') THEN
     DECLARE
       v_current_investment RECORD;
       v_upgrade_amount DECIMAL;
@@ -2221,14 +2237,16 @@ IF EXISTS (SELECT 1 FROM investments WHERE user_id = p_user_id AND status = 'act
       SELECT * INTO v_current_investment
       FROM investments WHERE user_id = p_user_id AND status = 'active' LIMIT 1;
 
-      v_upgrade_amount := p_amount - v_current_investment.amount;
+      -- 🔧 UPGRADE : on ne débite que la DIFFÉRENCE (nouveau prix - déjà investi),
+      -- pas le prix total du nouveau pack. Ex: pack 10 000 → 20 000 = 10 000 à débiter.
+      v_upgrade_amount := v_plan.price - v_current_investment.amount;
 
       IF v_upgrade_amount < 0 THEN
         RETURN jsonb_build_object('success', false, 'error', 'Cannot downgrade plan');
       END IF;
 
       IF v_balance < v_upgrade_amount THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Insufficient balance for upgrade');
+        RETURN jsonb_build_object('success', false, 'error', 'Solde insuffisant pour l''upgrade. Il vous manque ' || (v_upgrade_amount - v_balance)::TEXT || ' FCFA.');
       END IF;
 
       UPDATE wallets
@@ -2252,6 +2270,11 @@ IF EXISTS (SELECT 1 FROM investments WHERE user_id = p_user_id AND status = 'act
       RETURN jsonb_build_object('success', true, 'upgrade', true, 'upgrade_amount', v_upgrade_amount);
     END;
   ELSE
+    -- 🆕 Nouvelle activation : la balance doit couvrir le prix TOTAL du pack
+    IF v_balance < p_amount THEN
+      RETURN jsonb_build_object('success', false, 'error', 'Solde insuffisant pour activer ce pack. Il vous manque ' || (p_amount - v_balance)::TEXT || ' FCFA.');
+    END IF;
+
     UPDATE wallets SET balance = balance - p_amount, invested_capital = invested_capital + p_amount, updated_at = NOW()
     WHERE id = v_wallet_id;
 

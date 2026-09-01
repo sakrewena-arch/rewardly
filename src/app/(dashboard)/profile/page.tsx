@@ -35,22 +35,37 @@ export default function ProfilePage() {
   const [referralError, setReferralError] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
 
-  // Charger le parrain de l'utilisateur
+  // Charger le parrain de l'utilisateur (via referrals OU profiles.referred_by)
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
     if (!supabase) return;
     const loadReferrer = async () => {
+      let referrerId: string | null = null;
+
+      // 1. Chercher dans la table referrals (relation parrain → filleul)
       const { data: ref } = await supabase
         .from("referrals")
         .select("referrer_id")
         .eq("referred_id", user.id)
         .maybeSingle();
       if (ref?.referrer_id) {
+        referrerId = ref.referrer_id;
+      } else {
+        // 2. Fallback : profil de l'utilisateur → referred_by
+        const { data: myProfile } = await supabase
+          .from("profiles")
+          .select("referred_by")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (myProfile?.referred_by) referrerId = myProfile.referred_by;
+      }
+
+      if (referrerId) {
         const { data: refProfile } = await supabase
           .from("profiles")
           .select("full_name, username, referral_code")
-          .eq("user_id", ref.referrer_id)
+          .eq("user_id", referrerId)
           .maybeSingle();
         setReferrer(refProfile);
       }
