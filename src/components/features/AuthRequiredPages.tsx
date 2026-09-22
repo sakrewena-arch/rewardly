@@ -1,35 +1,15 @@
 "use client";
 
 import { AuthRequired } from "./AuthRequired";
-import { Wallet, TrendingUp, User, Crown, ArrowUpRight, Bell, Share2, Settings, Shield, BarChart3, Clock, Megaphone } from "lucide-react";
+import { User, ArrowUpRight, Bell, Share2, Settings, Shield, BarChart3, Clock, Megaphone } from "lucide-react";
 
 // Pages protégées avec leur message personnalisé
-export function DepositAuth() {
-  return (
-    <AuthRequired
-      title="Dépôt"
-      description="Pour plus de sécurité et éviter de perdre vos fonds, créez un compte ou connectez-vous avant de faire un dépôt."
-      icon={<Wallet className="w-10 h-10 text-purple-600" />}
-    />
-  );
-}
-
 export function WithdrawAuth() {
   return (
     <AuthRequired
       title="Retrait"
       description="Pour retirer vos gains en toute sécurité, créez un compte ou connectez-vous. Vos fonds sont protégés."
       icon={<ArrowUpRight className="w-10 h-10 text-purple-600" />}
-    />
-  );
-}
-
-export function InvestAuth() {
-  return (
-    <AuthRequired
-      title="Investissement"
-      description="Pour activer un pack et commencer à gagner, créez un compte ou connectez-vous. Choisissez votre pack et débloquez vos tâches."
-      icon={<Crown className="w-10 h-10 text-purple-600" />}
     />
   );
 }

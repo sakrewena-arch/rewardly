@@ -14,6 +14,17 @@ export function formatCurrency(amount: number, currency: string = "XOF"): string
   }).format(amount);
 }
 
+/**
+ * Récompense affichée d'une tâche.
+ * Si un libellé texte (amount_label) est fourni (ex : « 20% de la valeur »),
+ * il remplace le montant FCFA ; sinon on affiche « +X FCFA ».
+ */
+export function formatTaskReward(task: { amount: number; amount_label?: string | null }): string {
+  const label = task?.amount_label?.trim();
+  if (label) return label;
+  return `+${formatCurrency(task.amount)}`;
+}
+
 export function formatDate(date: string | Date, format: "short" | "long" | "relative" = "short"): string {
   const d = new Date(date);
   if (format === "relative") {

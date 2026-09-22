@@ -28,42 +28,36 @@ export async function submitTaskAction(taskId: string, answers: Record<string, s
 
   if (error) {
     console.error("submit_task RPC error:", error.message);
+    // Cas "ancienne base" : la RPC submit_task n'a pas encore été remplacée
+    // par la migration 00022 (message d'erreur lié aux packs supprimés).
+    const m = (error.message || "").toLowerCase();
+    if (m.includes("pack") || m.includes("invest") || m.includes("actif")) {
+      return {
+        success: false,
+        error: "La plateforme est désormais gratuite. L'ancienne règle « pack » est encore active en base : exécutez la migration 00022 (voir la console Supabase) pour activer la tâche quotidienne gratuite.",
+      };
+    }
     return { success: false, error: `Erreur serveur: ${error.message}` };
   }
 
   revalidatePath("/tasks");
-  return data;
-}
 
-// ============ DEPOSIT ============
-
-export async function submitDepositAction(input: {
-  amount: number;
-  method: string;
-  reference?: string;
-  proofUrl?: string;
-}) {
-  const user = await getCurrentUser();
-  if (!user) return { success: false, error: "Non authentifié" };
-  const supabase = await createClient();
-  if (!supabase) return { success: false, error: "Supabase non configuré" };
-
-  const { data, error } = await supabase.rpc("submit_deposit", {
-    p_user_id: user.id,
-    p_amount: input.amount,
-    p_method: input.method,
-    p_reference: input.reference || null,
-    p_proof_url: input.proofUrl || null,
-  });
-
-  if (error) {
-    console.error("submit_deposit RPC error:", error.message);
-    return { success: false, error: `Erreur serveur: ${error.message}` };
+  // Le RPC a répondu avec un JSONB { success:false, error: ... } : on traduit
+  // le cas "ancienne base" (règle pack encore active en base) en message clair.
+  if (data && typeof data === "object" && (data as any)?.success === false) {
+    const msg = String((data as any)?.error || "").toLowerCase();
+    if (msg.includes("pack") || msg.includes("actif") || msg.includes("invest")) {
+      return {
+        success: false,
+        error: "La plateforme est désormais gratuite. L'ancienne règle « pack » est encore active en base : exécutez la migration 00022 (SQL Editor de Supabase) pour activer la tâche quotidienne gratuite.",
+      };
+    }
   }
 
-  revalidatePath("/deposit");
   return data;
 }
+
+// ============ (LE DÉPÔT A ÉTÉ SUPPRIMÉ — plateforme 100% gratuite) ============
 
 // ============ WITHDRAWAL ============
 
@@ -93,29 +87,7 @@ export async function submitWithdrawalAction(input: {
   return data;
 }
 
-// ============ ACTIVATE PLAN ============
-
-export async function activatePlanAction(planId: string, amount: number) {
-  const user = await getCurrentUser();
-  if (!user) return { success: false, error: "Non authentifié" };
-  const supabase = await createClient();
-  if (!supabase) return { success: false, error: "Supabase non configuré" };
-
-  const { data, error } = await supabase.rpc("activate_plan", {
-    p_user_id: user.id,
-    p_plan_id: planId,
-    p_amount: amount,
-  });
-
-  if (error) {
-    console.error("activate_plan RPC error:", error.message);
-    return { success: false, error: `Erreur serveur: ${error.message}` };
-  }
-
-  revalidatePath("/invest");
-  revalidatePath("/dashboard");
-  return data;
-}
+// ============ (LES PACKS / INVESTISSEMENTS ONT ÉTÉ SUPPRIMÉS — gratuits) ============
 
 // ============ NOTIFICATIONS ============
 
@@ -191,49 +163,18 @@ export async function applyReferralCodeAction(code: string) {
   if (!referrer) return { success: false, error: "Code de parrainage invalide" };
   if (referrer.user_id === user.id) return { success: false, error: "Vous ne pouvez pas vous parrainer vous-même" };
 
-  // 3. Lire la commission fixe depuis system_settings
-  const { data: settings } = await adminClient
-    .from("system_settings")
-    .select("value")
-    .eq("key", "referral_commission_fixed")
-    .maybeSingle();
-  const commission = Number(settings?.value || 500);
-
-  // 4. Créer la relation de parrainage
+  // 3. Créer la relation de parrainage UNIQUEMENT
+  //    (le parrain n'est PAS crédité : il gagne 10% des gains du filleul,
+  //     crédit automatique via la fonction SQL credit_referral_commission).
   const { error: refError } = await adminClient.from("referrals").insert({
     referrer_id: referrer.user_id,
     referred_id: user.id,
-    commission,
+    commission: 0,
     status: "paid",
   });
   if (refError) return { success: false, error: refError.message };
 
-  // 5. Créditer la commission au parrain (wallet + transaction)
-  const { data: wallet } = await adminClient
-    .from("wallets")
-    .select("*")
-    .eq("user_id", referrer.user_id)
-    .maybeSingle();
-  if (wallet) {
-    await adminClient
-      .from("wallets")
-      .update({
-        balance: (wallet.balance || 0) + commission,
-        total_earnings: (wallet.total_earnings || 0) + commission,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", referrer.user_id);
-    await adminClient.from("wallet_transactions").insert({
-      user_id: referrer.user_id,
-      wallet_id: wallet.id,
-      amount: commission,
-      type: "reward",
-      description: `Commission de parrainage (${trimmedCode})`,
-      status: "completed",
-    });
-  }
-
   revalidatePath("/profile");
   revalidatePath("/referral");
-  return { success: true, commission };
+  return { success: true };
 }

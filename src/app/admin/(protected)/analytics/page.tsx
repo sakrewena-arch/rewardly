@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Users, DollarSign, TrendingUp, Wallet, CheckSquare, Clock, XCircle, Bell, Target, Activity, BarChart3 } from "lucide-react";
+import { ArrowLeft, Users, TrendingUp, Wallet, CheckSquare, Bell, Activity, BarChart3 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -27,25 +27,20 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 interface AnalyticsData {
   dayLabels: string[];
   registrationsByDay: number[];
-  depositsByDay: number[];
   withdrawalsByDay: number[];
   tasksByDay: number[];
   submissionsByDay: number[];
-  investmentsByDay: number[];
   notificationsByDay: number[];
   totalUsers: number;
   totalTasks: number;
-  totalDeposits: number;
   totalWithdrawals: number;
   totalEarnings: number;
   totalBalance: number;
-  totalInvestments: number;
   totalSubmissions: number;
   approvedSubmissions: number;
   pendingSubmissions: number;
   rejectedSubmissions: number;
   totalNotifications: number;
-  conversionRate: number;
 }
 
 export default function AdminAnalyticsPage() {
@@ -115,19 +110,9 @@ export default function AdminAnalyticsPage() {
     }],
   };
 
-  const financialData = {
+  const withdrawalsData = {
     labels: data.dayLabels,
     datasets: [
-      {
-        label: "Dépôts",
-        data: data.depositsByDay,
-        borderColor: "#22C55E",
-        backgroundColor: "rgba(34, 197, 94, 0.1)",
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: "#22C55E",
-        pointRadius: 4,
-      },
       {
         label: "Retraits",
         data: data.withdrawalsByDay,
@@ -165,20 +150,6 @@ export default function AdminAnalyticsPage() {
     ],
   };
 
-  const investmentsData = {
-    labels: data.dayLabels,
-    datasets: [{
-      label: "Investissements (FCFA)",
-      data: data.investmentsByDay,
-      fill: true,
-      borderColor: "#F59E0B",
-      backgroundColor: "rgba(245, 158, 11, 0.1)",
-      tension: 0.4,
-      pointBackgroundColor: "#F59E0B",
-      pointRadius: 4,
-    }],
-  };
-
   const submissionsDoughnut = {
     labels: ["Validées", "En attente", "Refusées"],
     datasets: [{
@@ -196,10 +167,8 @@ export default function AdminAnalyticsPage() {
 
   const stats = [
     { icon: Users, label: "Utilisateurs", value: data.totalUsers.toString(), color: "text-purple-500", bg: "bg-purple-100 dark:bg-purple-500/20" },
-    { icon: DollarSign, label: "Dépôts totaux", value: formatCurrency(data.totalDeposits), color: "text-green-500", bg: "bg-green-100 dark:bg-green-500/20" },
     { icon: TrendingUp, label: "Retraits totaux", value: formatCurrency(data.totalWithdrawals), color: "text-red-500", bg: "bg-red-100 dark:bg-red-500/20" },
     { icon: Wallet, label: "Gains totaux", value: formatCurrency(data.totalEarnings), color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-500/20" },
-    { icon: Target, label: "Investissements", value: formatCurrency(data.totalInvestments), color: "text-yellow-500", bg: "bg-yellow-100 dark:bg-yellow-500/20" },
     { icon: CheckSquare, label: "Tâches", value: data.totalTasks.toString(), color: "text-purple-500", bg: "bg-purple-100 dark:bg-purple-500/20" },
     { icon: Activity, label: "Soumissions", value: data.totalSubmissions.toString(), color: "text-green-500", bg: "bg-green-100 dark:bg-green-500/20" },
     { icon: Bell, label: "Notifications", value: data.totalNotifications.toString(), color: "text-blue-500", bg: "bg-blue-100 dark:bg-blue-500/20" },
@@ -240,32 +209,8 @@ export default function AdminAnalyticsPage() {
           ))}
         </div>
 
-        {/* Conversion Rate */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold flex items-center gap-2"><Target className="w-4 h-4 text-purple-500" /> Taux de conversion</h3>
-                  <p className="text-sm text-[#8A8A8A] mt-1">Pourcentage d'utilisateurs ayant investi</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold text-purple-500">{data.conversionRate}%</p>
-                  <p className="text-xs text-[#8A8A8A]">{data.totalUsers} utilisateurs</p>
-                </div>
-              </div>
-              <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-4">
-                <div
-                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, data.conversionRate)}%` }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
         {/* Inscriptions */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
           <Card>
             <CardContent className="p-5">
               <h3 className="font-semibold mb-4 flex items-center gap-2"><Users className="w-4 h-4 text-purple-500" /> Inscriptions (7 derniers jours)</h3>
@@ -274,12 +219,12 @@ export default function AdminAnalyticsPage() {
           </Card>
         </motion.div>
 
-        {/* Dépôts vs Retraits */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+        {/* Retraits */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
           <Card>
             <CardContent className="p-5">
-              <h3 className="font-semibold mb-4 flex items-center gap-2"><DollarSign className="w-4 h-4 text-green-500" /> Dépôts vs Retraits (7 derniers jours)</h3>
-              <Line data={financialData} options={{ ...lineOptions, plugins: { legend: { display: true, position: "bottom" as const } } }} />
+              <h3 className="font-semibold mb-4 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-red-500" /> Retraits (7 derniers jours)</h3>
+              <Line data={withdrawalsData} options={lineOptions} />
             </CardContent>
           </Card>
         </motion.div>
@@ -294,18 +239,8 @@ export default function AdminAnalyticsPage() {
           </Card>
         </motion.div>
 
-        {/* Investissements */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <Card>
-            <CardContent className="p-5">
-              <h3 className="font-semibold mb-4 flex items-center gap-2"><Target className="w-4 h-4 text-yellow-500" /> Investissements (7 derniers jours)</h3>
-              <Line data={investmentsData} options={lineOptions} />
-            </CardContent>
-          </Card>
-        </motion.div>
-
         {/* Soumissions */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <Card>
             <CardContent className="p-5">
               <h3 className="font-semibold mb-4 flex items-center gap-2"><CheckSquare className="w-4 h-4 text-green-500" /> Statut des soumissions</h3>
@@ -343,14 +278,6 @@ export default function AdminAnalyticsPage() {
                 <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
                   <p className="text-xs text-[#8A8A8A]">Gains totaux</p>
                   <p className="text-lg font-bold text-green-500">{formatCurrency(data.totalEarnings)}</p>
-                </div>
-                <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
-                  <p className="text-xs text-[#8A8A8A]">Investissements</p>
-                  <p className="text-lg font-bold text-yellow-500">{formatCurrency(data.totalInvestments)}</p>
-                </div>
-                <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
-                  <p className="text-xs text-[#8A8A8A]">Dépôts</p>
-                  <p className="text-lg font-bold text-green-500">{formatCurrency(data.totalDeposits)}</p>
                 </div>
                 <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-xl">
                   <p className="text-xs text-[#8A8A8A]">Retraits</p>

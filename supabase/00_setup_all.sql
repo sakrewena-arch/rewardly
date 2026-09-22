@@ -1,4 +1,23 @@
 -- ============================================================
+-- REWARDLY — FICHIER UNIQUE D'INSTALLATION / CORRECTION
+-- ============================================================
+--   ✅ UN SEUL fichier à exécuter (Supabase → SQL Editor → Run).
+--   ✅ IDEMPOTENT : exécutable plusieurs fois sans erreur
+--      (CREATE OR REPLACE / IF NOT EXISTS partout).
+--   ✅ Inclut la refonte « 100% GRATUITE » :
+--        · submit_task        → 1 tâche / jour, AUCUN pack requis
+--        · submit_withdrawal  → retrait des gains SANS délai d'investissement
+--        · get_platform_stats → sans dépôts / investissements / packs
+--   ✅ Types natifs %ROWTYPE pour fiabilité (submit_task, submit_withdrawal).
+--
+--   ⚠️ Exécution :
+--      · Base EXISTANTE : exécutez ce fichier pour CORRIGER les fonctions
+--        et compléter le schéma (idempotent, sans perte de données).
+--      · Base VIERGE : exécutez-le une première fois (il crée les tables
+--        et les fonctions), puis utilisez 01_reset_all.sql si vous voulez
+--        repartir à zéro côté utilisateurs.
+-- ============================================================
+-- ============================================================
 -- REWARDLY - CONSOLIDATED SCHEMA (IDEMPOTENT)
 -- ============================================================
 -- Ce fichier regroupe TOUT le SQL nécessaire pour la plateforme.
@@ -305,6 +324,222 @@ CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_id ON admin_logs(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC);
 
 -- ============================================================
+-- 3bis. TABLES COMPLÉMENTAIRES (preferences, services, push)
+-- ============================================================
+
+-- USER PREFERENCES (langue, devise, notifications)
+CREATE TABLE IF NOT EXISTS public.user_preferences (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  language TEXT NOT NULL DEFAULT 'fr',
+  currency TEXT NOT NULL DEFAULT 'XOF',
+  push_notifications BOOLEAN NOT NULL DEFAULT true,
+  email_notifications BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Trigger pour mettre à jour updated_at
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_user_preferences_updated_at ON public.user_preferences;
+CREATE TRIGGER set_user_preferences_updated_at
+  BEFORE UPDATE ON public.user_preferences
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- RLS préférences (chacun gère les siennes)
+ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users read own preferences" ON public.user_preferences;
+CREATE POLICY "Users read own preferences" ON public.user_preferences
+  FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users insert own preferences" ON public.user_preferences;
+CREATE POLICY "Users insert own preferences" ON public.user_preferences
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users update own preferences" ON public.user_preferences;
+CREATE POLICY "Users update own preferences" ON public.user_preferences
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- RPC : upsert des préférences (évite les conflits)
+CREATE OR REPLACE FUNCTION public.upsert_user_preferences(
+  p_language TEXT,
+  p_currency TEXT,
+  p_push_notifications BOOLEAN,
+  p_email_notifications BOOLEAN
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.user_preferences (user_id, language, currency, push_notifications, email_notifications)
+  VALUES (auth.uid(), p_language, p_currency, p_push_notifications, p_email_notifications)
+  ON CONFLICT (user_id)
+  DO UPDATE SET
+    language = EXCLUDED.language,
+    currency = EXCLUDED.currency,
+    push_notifications = EXCLUDED.push_notifications,
+    email_notifications = EXCLUDED.email_notifications,
+    updated_at = NOW();
+END;
+$$;
+
+-- SERVICE ORDERS (commandes publicitaires / sondages / tests)
+CREATE TABLE IF NOT EXISTS public.service_orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  company_name TEXT NOT NULL,
+  contact_email TEXT NOT NULL,
+  contact_phone TEXT NOT NULL,
+  service_type TEXT NOT NULL,
+  description TEXT,
+  pack TEXT NOT NULL,
+  pack_amount NUMERIC NOT NULL,
+  duration TEXT NOT NULL,
+  target_users INTEGER,
+  url TEXT,
+  download_url TEXT,
+  questions TEXT,
+  ia_url TEXT,
+  app_name TEXT,
+  game_name TEXT,
+  site_name TEXT,
+  instructions TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  payment_status TEXT NOT NULL DEFAULT 'paid',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DROP TRIGGER IF EXISTS set_service_orders_updated_at ON public.service_orders;
+CREATE TRIGGER set_service_orders_updated_at
+  BEFORE UPDATE ON public.service_orders
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+ALTER TABLE public.service_orders ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users read own service orders" ON public.service_orders;
+CREATE POLICY "Users read own service orders" ON public.service_orders
+  FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users insert service orders" ON public.service_orders;
+CREATE POLICY "Users insert service orders" ON public.service_orders
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- RPC : créer une commande service + débiter le wallet
+CREATE OR REPLACE FUNCTION public.create_service_order(
+  p_company_name TEXT,
+  p_contact_email TEXT,
+  p_contact_phone TEXT,
+  p_service_type TEXT,
+  p_description TEXT,
+  p_pack TEXT,
+  p_pack_amount NUMERIC,
+  p_duration TEXT,
+  p_target_users INTEGER,
+  p_url TEXT DEFAULT NULL,
+  p_download_url TEXT DEFAULT NULL,
+  p_questions TEXT DEFAULT NULL,
+  p_ia_url TEXT DEFAULT NULL,
+  p_app_name TEXT DEFAULT NULL,
+  p_game_name TEXT DEFAULT NULL,
+  p_site_name TEXT DEFAULT NULL,
+  p_instructions TEXT DEFAULT NULL
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID := auth.uid();
+  v_wallet_id UUID;
+  v_balance NUMERIC;
+  v_order_id UUID;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Non authentifié');
+  END IF;
+
+  SELECT id, balance INTO v_wallet_id, v_balance
+  FROM public.wallets
+  WHERE user_id = v_user_id
+  LIMIT 1;
+
+  IF v_wallet_id IS NULL THEN
+    RETURN json_build_object('success', false, 'error', 'Wallet introuvable');
+  END IF;
+
+  IF v_balance < p_pack_amount THEN
+    RETURN json_build_object('success', false, 'error', 'Solde insuffisant. Rechargez votre wallet.');
+  END IF;
+
+  UPDATE public.wallets
+  SET balance = balance - p_pack_amount,
+      updated_at = NOW()
+  WHERE id = v_wallet_id;
+
+  INSERT INTO public.wallet_transactions (user_id, wallet_id, amount, type, description, status)
+  VALUES (v_user_id, v_wallet_id, -p_pack_amount, 'service', 'Paiement pack ' || p_pack || ' - ' || p_service_type, 'completed');
+
+  INSERT INTO public.service_orders (
+    user_id, company_name, contact_email, contact_phone,
+    service_type, description, pack, pack_amount, duration, target_users,
+    url, download_url, questions, ia_url, app_name, game_name, site_name, instructions,
+    status, payment_status
+  ) VALUES (
+    v_user_id, p_company_name, p_contact_email, p_contact_phone,
+    p_service_type, p_description, p_pack, p_pack_amount, p_duration, p_target_users,
+    p_url, p_download_url, p_questions, p_ia_url, p_app_name, p_game_name, p_site_name, p_instructions,
+    'pending', 'paid'
+  )
+  RETURNING id INTO v_order_id;
+
+  RETURN json_build_object('success', true, 'order_id', v_order_id);
+END;
+$$;
+
+-- PUSH TOKENS (notifications natives Capacitor)
+CREATE TABLE IF NOT EXISTS public.push_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL CHECK (platform IN ('android', 'ios', 'web')),
+  token TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (user_id, token)
+);
+
+CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON public.push_tokens(user_id);
+
+ALTER TABLE public.push_tokens ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS push_tokens_select_own ON public.push_tokens;
+CREATE POLICY push_tokens_select_own ON public.push_tokens
+  FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS push_tokens_insert_own ON public.push_tokens;
+CREATE POLICY push_tokens_insert_own ON public.push_tokens
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS push_tokens_delete_own ON public.push_tokens;
+CREATE POLICY push_tokens_delete_own ON public.push_tokens
+  FOR DELETE USING (auth.uid() = user_id);
+
+CREATE OR REPLACE FUNCTION update_push_tokens_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS update_push_tokens_updated_at ON public.push_tokens;
+CREATE TRIGGER update_push_tokens_updated_at
+  BEFORE UPDATE ON public.push_tokens
+  FOR EACH ROW EXECUTE FUNCTION update_push_tokens_updated_at();
+
+-- ============================================================
 -- 4. TRIGGERS & FUNCTIONS
 -- ============================================================
 
@@ -329,9 +564,9 @@ $$;
 -- avec d'anciennes versions cassées de handle_new_user
 -- L'inscription via lien (?ref=CODE) :
 --   1. génère un code de parrainage unique au filleul,
---   2. enregistre le lien référent → filleul,
---   3. CRÉDITE IMMÉDIATEMENT la commission dans le wallet du parrain
---      (plus besoin de ressaisir le code après l'inscription).
+--   2. enregistre le lien référent → filleul (relation SERVILLE, SANS crédit),
+--   3. le parrain gagne ensuite 10% des GAINS du filleul (automatique à chaque
+--      tâche validée, via credit_referral_commission).
 CREATE OR REPLACE FUNCTION rewardly_handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -342,8 +577,6 @@ DECLARE
   v_code text := NULL;
   v_meta_code text := NULL;
   v_referrer_id uuid := NULL;
-  v_commission numeric := 500;
-  v_wallet_id uuid := NULL;
 BEGIN
   -- 🔢 Code de parrainage unique garanti
   v_code := generate_unique_referral_code();
@@ -367,52 +600,22 @@ BEGIN
     v_referrer_id
   )
   ON CONFLICT (user_id) DO UPDATE
-    SET referral_code = COALESCE(public.profiles.referral_code, excluded.referral_code);
+    SET referral_code = COALESCE(public.profiles.referral_code, excluded.referral_code),
+        referred_by = COALESCE(public.profiles.referred_by, excluded.referred_by);
 
   -- 💰 Créer le wallet s'il manque
   INSERT INTO public.wallets (user_id)
   VALUES (NEW.id)
   ON CONFLICT (user_id) DO NOTHING;
 
-  -- 🎁 Si un parrain a été trouvé : référence + commission payée immédiatement
+  -- 🎁 Si un parrain a été trouvé : on enregistre la relation UNIQUEMENT.
+  --    Aucun crédit immédiat — le parrain recevra 10% des gains du filleul
+  --    (crédit automatique via credit_referral_commission à chaque tâche validée).
   IF v_referrer_id IS NOT NULL THEN
     BEGIN
-      SELECT COALESCE(s.value::text::numeric, 500) INTO v_commission
-      FROM public.system_settings AS s
-      WHERE s.key = 'referral_commission_fixed'
-      LIMIT 1;
-
-      -- Référence parrain → filleul
       INSERT INTO public.referrals (referrer_id, referred_id, commission, status)
-      VALUES (v_referrer_id, NEW.id, v_commission, 'paid')
-      ON CONFLICT (referred_id) DO UPDATE
-        SET commission = COALESCE(public.referrals.commission, excluded.commission);
-
-      -- Wallet du parrain
-      SELECT id INTO v_wallet_id FROM public.wallets WHERE user_id = v_referrer_id;
-      IF v_wallet_id IS NULL THEN
-        INSERT INTO public.wallets (user_id, balance, locked_amount)
-        VALUES (v_referrer_id, 0, 0)
-        RETURNING id INTO v_wallet_id;
-      END IF;
-
-      -- 💸 Créditer la commission (balance + gains retirables)
-      UPDATE public.wallets
-      SET balance = balance + v_commission,
-          total_earnings = total_earnings + v_commission,
-          updated_at = NOW()
-      WHERE id = v_wallet_id;
-
-      -- 📒 Traçabilité
-      INSERT INTO public.wallet_transactions (user_id, wallet_id, amount, type, description, status)
-      VALUES (v_referrer_id, v_wallet_id, v_commission, 'referral',
-              'Commission de parrainage (inscription via lien)', 'completed');
-
-      -- 🔔 Notification
-      INSERT INTO public.notifications (user_id, title, message, type)
-      VALUES (v_referrer_id, 'Nouveau filleul 🎉',
-              'Un utilisateur s''est inscrit avec votre code de parrainage ! +' || v_commission::TEXT || ' FCFA',
-              'referral');
+      VALUES (v_referrer_id, NEW.id, 0, 'paid')
+      ON CONFLICT (referred_id) DO NOTHING;
     EXCEPTION WHEN OTHERS THEN
       NULL; -- Ne jamais bloquer la création d'un utilisateur
     END;
@@ -510,14 +713,16 @@ ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 -- DROP ALL OLD POLICIES (to avoid duplicates)
 -- ============================================================
 DO $$
-DECLARE pol RECORD;
+DECLARE
+  v_policyname TEXT;
+  v_tablename TEXT;
 BEGIN
-  FOR pol IN
+  FOR v_policyname, v_tablename IN
     SELECT policyname, tablename
     FROM pg_policies
     WHERE schemaname = 'public'
   LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', v_policyname, v_tablename);
   END LOOP;
 END $$;
 
@@ -818,17 +1023,15 @@ CREATE OR REPLACE FUNCTION submit_task(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, auth
 AS $$
 DECLARE
-  v_task RECORD;
+  v_task tasks%ROWTYPE;
   v_submission_id UUID;
   v_wallet_id UUID;
   v_key TEXT;
   v_value TEXT;
-  v_plan RECORD;
-  v_daily_limit INTEGER;
   v_completed_today INTEGER;
-  v_investment RECORD;
 BEGIN
   -- 🔒 Vérification : seul l'utilisateur connecté peut soumettre pour lui-même
   IF auth.uid() IS NULL OR auth.uid() != p_user_id THEN
@@ -840,54 +1043,17 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Task not found');
   END IF;
 
-  -- 🔒 Vérification : l'utilisateur doit avoir un pack actif (investissement)
-  SELECT * INTO v_investment FROM investments
-  WHERE user_id = p_user_id AND status = 'active'
-  ORDER BY start_date DESC LIMIT 1;
+  -- ✅ Plateforme 100% GRATUITE : aucun pack ni investissement requis.
+  --    Tous les utilisateurs peuvent accomplir toutes les tâches actives.
+  -- 🔒 Quota : 1 tâche par jour (toutes tâches confondues).
+  SELECT COUNT(*) INTO v_completed_today
+  FROM task_submissions
+  WHERE user_id = p_user_id
+    AND status IN ('approved', 'pending')
+    AND created_at >= CURRENT_DATE;
 
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Aucun pack actif. Activez un pack pour accomplir des tâches.');
-  END IF;
-
-  -- 🔒 Vérification : le pack n'est pas expiré
-  IF v_investment.end_date < NOW() THEN
-    UPDATE investments SET status = 'completed', updated_at = NOW()
-    WHERE id = v_investment.id;
-    RETURN jsonb_build_object('success', false, 'error', 'Pack expiré. Veuillez en activer un nouveau.');
-  END IF;
-
-  -- 🔒 Vérification : la tâche est accessible au plan de l'utilisateur
-  IF v_task.plan_id IS NOT NULL THEN
-    SELECT * INTO v_plan FROM plans WHERE id = v_task.plan_id;
-    IF v_plan.id != v_investment.plan_id THEN
-      RETURN jsonb_build_object('success', false, 'error', 'Cette tâche ne correspond pas à votre pack.');
-    END IF;
-  END IF;
-
-  -- 🔒 Vérification anti-double soumission (aujourd'hui)
-  IF EXISTS (
-    SELECT 1 FROM task_submissions
-    WHERE user_id = p_user_id AND task_id = p_task_id
-      AND status IN ('approved', 'pending')
-      AND created_at >= CURRENT_DATE
-  ) THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Vous avez déjà accompli cette tâche aujourd''hui.');
-  END IF;
-
-  -- 🔒 Vérification limite quotidienne de tâches du plan
-  SELECT daily_tasks INTO v_daily_limit FROM plans WHERE id = v_investment.plan_id;
-  IF v_daily_limit IS NOT NULL AND v_daily_limit != -1 THEN
-    SELECT COUNT(*) INTO v_completed_today
-    FROM task_submissions ts
-    JOIN tasks t ON t.id = ts.task_id
-    WHERE ts.user_id = p_user_id
-      AND ts.status IN ('approved', 'pending')
-      AND ts.created_at >= CURRENT_DATE
-      AND (t.plan_id = v_investment.plan_id OR t.plan_id IS NULL);
-
-    IF v_completed_today >= v_daily_limit THEN
-      RETURN jsonb_build_object('success', false, 'error', 'Limite quotidienne de ' || v_daily_limit || ' tâches atteinte.');
-    END IF;
+  IF v_completed_today > 0 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Vous avez déjà accompli votre tâche du jour. Revenez demain !');
   END IF;
 
   SELECT id INTO v_wallet_id FROM wallets WHERE user_id = p_user_id;
@@ -934,7 +1100,13 @@ BEGIN
                     earnings = daily_statistics.earnings + v_task.amount;
     EXCEPTION WHEN OTHERS THEN NULL;
     END;
-    
+
+    -- 🎁 Parrainage : le parrain reçoit 10% des gains du filleul
+    BEGIN
+      PERFORM public.credit_referral_commission(p_user_id, v_task.amount, v_submission_id);
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+
     RETURN jsonb_build_object('success', true, 'submission_id', v_submission_id, 'auto_approved', true, 'amount', v_task.amount);
   END IF;
   
@@ -953,11 +1125,14 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_submission RECORD;
+  v_user_id UUID;
+  v_task_amount DECIMAL;
+  v_task_title TEXT;
+  v_status TEXT;
   v_wallet_id UUID;
 BEGIN
-  SELECT ts.*, t.amount AS task_amount, t.title AS task_title
-  INTO v_submission
+  SELECT ts.status, ts.user_id, t.amount, t.title
+  INTO v_status, v_user_id, v_task_amount, v_task_title
   FROM task_submissions ts
   JOIN tasks t ON t.id = ts.task_id
   WHERE ts.id = p_submission_id;
@@ -966,7 +1141,7 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Submission not found');
   END IF;
   
-  IF v_submission.status = 'approved' THEN
+  IF v_status = 'approved' THEN
     RETURN jsonb_build_object('success', false, 'error', 'Submission already approved');
   END IF;
   
@@ -974,41 +1149,47 @@ BEGIN
   SET status = 'approved', admin_comment = p_comment, reviewed_by = p_admin_id, updated_at = NOW()
   WHERE id = p_submission_id;
   
-  SELECT id INTO v_wallet_id FROM wallets WHERE user_id = v_submission.user_id;
+  SELECT id INTO v_wallet_id FROM wallets WHERE user_id = v_user_id;
   IF v_wallet_id IS NULL THEN
-    INSERT INTO wallets (user_id, balance) VALUES (v_submission.user_id, 0)
+    INSERT INTO wallets (user_id, balance) VALUES (v_user_id, 0)
     RETURNING id INTO v_wallet_id;
   END IF;
   
   UPDATE wallets 
-  SET balance = balance + v_submission.task_amount,
-      total_earnings = total_earnings + v_submission.task_amount,
+  SET balance = balance + v_task_amount,
+      total_earnings = total_earnings + v_task_amount,
       updated_at = NOW()
-  WHERE user_id = v_submission.user_id;
+  WHERE user_id = v_user_id;
   
   BEGIN
     INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status)
-    VALUES (v_submission.user_id, v_wallet_id, v_submission.task_amount, 'reward', v_submission.task_title, 'completed');
+    VALUES (v_user_id, v_wallet_id, v_task_amount, 'reward', v_task_title, 'completed');
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
   
   BEGIN
     INSERT INTO daily_statistics (user_id, date, tasks_completed, earnings)
-    VALUES (v_submission.user_id, CURRENT_DATE, 1, v_submission.task_amount)
+    VALUES (v_user_id, CURRENT_DATE, 1, v_task_amount)
     ON CONFLICT (user_id, date) 
     DO UPDATE SET tasks_completed = daily_statistics.tasks_completed + 1,
-                  earnings = daily_statistics.earnings + v_submission.task_amount;
+                  earnings = daily_statistics.earnings + v_task_amount;
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
-  
+
+  -- 🎁 Parrainage : le parrain reçoit 10% des gains du filleul
+  BEGIN
+    PERFORM public.credit_referral_commission(v_user_id, v_task_amount, p_submission_id);
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
+
   BEGIN
     INSERT INTO admin_logs (admin_id, action, entity_type, entity_id, details)
     VALUES (p_admin_id, 'approve_submission', 'task_submissions', p_submission_id, 
-            jsonb_build_object('amount', v_submission.task_amount));
+            jsonb_build_object('amount', v_task_amount));
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
   
-  RETURN jsonb_build_object('success', true, 'amount', v_submission.task_amount);
+  RETURN jsonb_build_object('success', true, 'amount', v_task_amount);
 END;
 $$;
 
@@ -1050,7 +1231,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_deposit RECORD;
+  v_deposit deposits%ROWTYPE;
   v_wallet_id UUID;
 BEGIN
   SELECT * INTO v_deposit FROM deposits WHERE id = p_deposit_id;
@@ -1121,7 +1302,7 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_withdrawal RECORD;
+  v_withdrawal withdrawals%ROWTYPE;
   v_wallet_id UUID;
 BEGIN
   SELECT * INTO v_withdrawal FROM withdrawals WHERE id = p_withdrawal_id;
@@ -1278,7 +1459,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_wallet_id UUID;
-  v_plan RECORD;
+  v_plan plans%ROWTYPE;
   v_balance DECIMAL;
 BEGIN
   SELECT * INTO v_plan FROM plans WHERE id = p_plan_id AND is_active = true;
@@ -1298,7 +1479,7 @@ BEGIN
   
   IF EXISTS (SELECT 1 FROM investments WHERE user_id = p_user_id AND status = 'active') THEN
     DECLARE
-      v_current_investment RECORD;
+      v_current_investment investments%ROWTYPE;
       v_upgrade_amount DECIMAL;
     BEGIN
       SELECT * INTO v_current_investment 
@@ -1358,6 +1539,7 @@ CREATE OR REPLACE FUNCTION create_task(
   p_title TEXT,
   p_description TEXT,
   p_amount DECIMAL,
+  p_amount_label TEXT DEFAULT NULL,
   p_plan_id UUID,
   p_category_id UUID DEFAULT NULL,
   p_icon TEXT DEFAULT '📋',
@@ -1378,9 +1560,9 @@ DECLARE
   v_task_id UUID;
   v_field JSONB;
 BEGIN
-  INSERT INTO tasks (title, description, amount, plan_id, category_id, icon, estimated_time, 
+  INSERT INTO tasks (title, description, amount, amount_label, plan_id, category_id, icon, estimated_time, 
                      instructions, link, max_completions, duration_minutes, deadline, validation_type, is_active)
-  VALUES (p_title, p_description, p_amount, p_plan_id, p_category_id, p_icon, p_estimated_time,
+  VALUES (p_title, p_description, p_amount, p_amount_label, p_plan_id, p_category_id, p_icon, p_estimated_time,
           p_instructions, p_link, p_max_completions, p_duration_minutes, p_deadline, p_validation_type, true)
   RETURNING id INTO v_task_id;
   
@@ -1422,6 +1604,7 @@ CREATE OR REPLACE FUNCTION update_task(
   p_title TEXT DEFAULT NULL,
   p_description TEXT DEFAULT NULL,
   p_amount DECIMAL DEFAULT NULL,
+  p_amount_label TEXT DEFAULT NULL,
   p_plan_id UUID DEFAULT NULL,
   p_icon TEXT DEFAULT NULL,
   p_estimated_time INTEGER DEFAULT NULL,
@@ -1442,6 +1625,7 @@ BEGIN
     title = COALESCE(p_title, title),
     description = COALESCE(p_description, description),
     amount = COALESCE(p_amount, amount),
+    amount_label = COALESCE(p_amount_label, amount_label),
     plan_id = COALESCE(p_plan_id, plan_id),
     icon = COALESCE(p_icon, icon),
     estimated_time = COALESCE(p_estimated_time, estimated_time),
@@ -1592,52 +1776,26 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_total_users INTEGER;
-  v_total_deposits DECIMAL;
+  v_total_tasks INTEGER;
   v_total_withdrawals DECIMAL;
   v_total_earnings DECIMAL;
-  v_total_investments DECIMAL;
-  v_pending_deposits INTEGER;
   v_pending_withdrawals INTEGER;
   v_pending_submissions INTEGER;
-  v_plans_with_users JSONB;
 BEGIN
   SELECT COUNT(*) INTO v_total_users FROM profiles WHERE role = 'user';
-  SELECT COALESCE(SUM(amount), 0) INTO v_total_deposits FROM deposits WHERE status = 'approved';
+  SELECT COUNT(*) INTO v_total_tasks FROM tasks;
   SELECT COALESCE(SUM(amount), 0) INTO v_total_withdrawals FROM withdrawals WHERE status = 'paid';
   SELECT COALESCE(SUM(total_earnings), 0) INTO v_total_earnings FROM wallets;
-  SELECT COALESCE(SUM(amount), 0) INTO v_total_investments FROM investments WHERE status = 'active';
-  SELECT COUNT(*) INTO v_pending_deposits FROM deposits WHERE status = 'pending';
   SELECT COUNT(*) INTO v_pending_withdrawals FROM withdrawals WHERE status = 'pending';
   SELECT COUNT(*) INTO v_pending_submissions FROM task_submissions WHERE status = 'pending';
-  
-  SELECT jsonb_agg(plan_data ORDER BY plan_order)
-  INTO v_plans_with_users
-  FROM (
-    SELECT 
-      jsonb_build_object(
-        'plan_id', p.id,
-        'plan_name', p.name,
-        'plan_slug', p.slug,
-        'plan_price', p.price,
-        'user_count', COUNT(DISTINCT i.user_id)
-      ) AS plan_data,
-      p.sort_order AS plan_order
-    FROM plans p
-    LEFT JOIN investments i ON i.plan_id = p.id AND i.status = 'active'
-    GROUP BY p.id, p.name, p.slug, p.price, p.sort_order
-    ORDER BY p.sort_order
-  ) sub;
-  
+
   RETURN jsonb_build_object(
     'total_users', v_total_users,
-    'total_deposits', v_total_deposits,
+    'total_tasks', v_total_tasks,
     'total_withdrawals', v_total_withdrawals,
     'total_earnings', v_total_earnings,
-    'total_investments', v_total_investments,
-    'pending_deposits', v_pending_deposits,
     'pending_withdrawals', v_pending_withdrawals,
-    'pending_submissions', v_pending_submissions,
-    'plans_with_users', COALESCE(v_plans_with_users, '[]'::JSONB)
+    'pending_submissions', v_pending_submissions
   );
 END;
 $$;
@@ -1712,12 +1870,12 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_wallet RECORD;
+  v_wallet wallets%ROWTYPE;
   v_withdrawable DECIMAL;
   v_withdrawal_id UUID;
   v_withdrawal_day INTEGER;
   v_investment_duration INTEGER;
-  v_last_investment RECORD;
+  v_last_investment investments%ROWTYPE;
   v_min_withdrawal DECIMAL;
 BEGIN
   SELECT * INTO v_wallet FROM wallets WHERE user_id = p_user_id;
@@ -1999,8 +2157,8 @@ VALUES
   ('min_withdrawal', '5000', 'Montant minimum de retrait'),
   ('withdrawal_day', '5', 'Jour autorisé pour les retraits (0=Dimanche, 5=Vendredi)'),
   ('investment_duration_days', '7', 'Duree d un investissement en jours'),
-  ('referral_commission_fixed', '500', 'Commission fixe de parrainage'),
-  ('referral_commission_percent', '5', 'Commission en pourcentage de parrainage'),
+  ('referral_commission_fixed', '0', 'Ancienne commission fixe (inutilisée)'),
+  ('referral_commission_percent', '10', 'Commission de parrainage : % des gains du filleul'),
   ('default_currency', '"XOF"', 'Devise par défaut'),
   ('maintenance_mode', 'false', 'Mode maintenance'),
   ('max_referrals', '50', 'Nombre maximum de filleuls')
@@ -2110,6 +2268,9 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'notifications') THEN missing := missing || 'notifications, '; END IF;
   IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'system_settings') THEN missing := missing || 'system_settings, '; END IF;
   IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'admin_logs') THEN missing := missing || 'admin_logs, '; END IF;
+  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'user_preferences') THEN missing := missing || 'user_preferences, '; END IF;
+  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'service_orders') THEN missing := missing || 'service_orders, '; END IF;
+  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'push_tokens') THEN missing := missing || 'push_tokens, '; END IF;
   
   IF missing != '' THEN
     RAISE EXCEPTION 'Tables manquantes: %', missing;
@@ -2203,7 +2364,7 @@ SET search_path = public, auth
 AS $$
 DECLARE
   v_wallet_id UUID;
-  v_plan RECORD;
+  v_plan plans%ROWTYPE;
   v_balance DECIMAL;
   v_investment_duration_days INTEGER;
 BEGIN
@@ -2231,7 +2392,7 @@ BEGIN
 
   IF EXISTS (SELECT 1 FROM investments WHERE user_id = p_user_id AND status = 'active') THEN
     DECLARE
-      v_current_investment RECORD;
+      v_current_investment investments%ROWTYPE;
       v_upgrade_amount DECIMAL;
     BEGIN
       SELECT * INTO v_current_investment
@@ -2291,6 +2452,14 @@ BEGIN
   END IF;
 END;
 $$;
+
+-- ============================================================
+-- COMPATIBILITÉ : colonnes ajoutées
+-- ============================================================
+-- Libellé de récompense (texte affiché à la place du montant FCFA,
+-- ex : « 20% de la valeur » — le montant numérique reste utilisé
+-- pour le crédit automatique).
+ALTER TABLE public.tasks ADD COLUMN IF NOT EXISTS amount_label TEXT;
 -- ============================================================
 -- 4. SUBMIT DEPOSIT : check auth.uid (défense en profondeur)
 -- ============================================================
@@ -2323,9 +2492,9 @@ BEGIN
 END;
 $$;
 -- ============================================================
--- 5. SUBMIT WITHDRAWAL : règles métier + calcul retirable cohérent
+-- SUBMIT WITHDRAWAL — sans délai d'investissement
 -- ============================================================
-CREATE OR REPLACE FUNCTION submit_withdrawal(
+CREATE OR REPLACE FUNCTION public.submit_withdrawal(
   p_user_id UUID,
   p_amount DECIMAL,
   p_method TEXT,
@@ -2337,14 +2506,12 @@ SECURITY DEFINER
 SET search_path = public, auth
 AS $$
 DECLARE
-  v_wallet RECORD;
+  v_wallet wallets%ROWTYPE;
   v_withdrawable DECIMAL;
   v_withdrawal_id UUID;
   v_min_withdrawal DECIMAL;
   v_withdrawal_day INTEGER;
   v_timezone_offset INTEGER;
-  v_investment_duration INTEGER;
-  v_last_investment RECORD;
 BEGIN
   -- 🔒 Vérification : seul l'utilisateur connecté peut soumettre pour lui-même
   IF auth.uid() IS NULL OR auth.uid() != p_user_id THEN
@@ -2362,27 +2529,10 @@ BEGIN
   INTO v_withdrawal_day;
   SELECT COALESCE((SELECT value::TEXT::INTEGER FROM system_settings WHERE key = 'withdrawal_timezone_offset'), 0)
   INTO v_timezone_offset;
-  SELECT COALESCE((SELECT value::TEXT::INTEGER FROM system_settings WHERE key = 'investment_duration_days'), 7)
-  INTO v_investment_duration;
 
   -- 📅 Jour de retrait (UTC + offset configurable)
   IF EXTRACT(DOW FROM (NOW() AT TIME ZONE 'UTC') + (v_timezone_offset * INTERVAL '1 hour')) != v_withdrawal_day THEN
     RETURN jsonb_build_object('success', false, 'error', 'Les retraits ne sont disponibles que le jour configuré');
-  END IF;
-
-  -- ⏳ Délai minimum après le premier investissement
-  SELECT * INTO v_last_investment FROM investments
-  WHERE user_id = p_user_id
-  ORDER BY start_date ASC
-  LIMIT 1;
-
-  IF FOUND THEN
-    IF (NOW() - v_last_investment.start_date) < (v_investment_duration * INTERVAL '1 day') THEN
-      RETURN jsonb_build_object(
-        'success', false,
-        'error', 'Veuillez patienter ' || v_investment_duration || ' jours après votre investissement avant de pouvoir retirer vos gains'
-      );
-    END IF;
   END IF;
 
   IF p_amount < v_min_withdrawal THEN
@@ -2390,29 +2540,25 @@ BEGIN
   END IF;
 
   -- 💰 Montant retirable COHÉRENT : gains - retraits payés - retraits
-  --    pending/approuvés - paiements services (aligné avec get_withdrawable_amount
-  --    et request_withdrawal_feeexpay).
+  --    pending/approuvés - paiements services (aligné avec get_withdrawable_amount).
   v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
     - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0)
     - COALESCE((SELECT SUM(w.amount) FROM withdrawals w WHERE w.user_id = p_user_id AND w.status IN ('pending', 'approved')), 0)
     - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'service'), 0);
 
   IF v_withdrawable < p_amount THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'error', 'Solde retirable insuffisant. Seuls vos gains sont retirables (disponible: ' || v_withdrawable::TEXT || ' FCFA)'
-    );
+    RETURN jsonb_build_object('success', false, 'error',
+      'Solde retirable insuffisant. Seuls vos gains de tâches sont retirables (disponible: ' || v_withdrawable::TEXT || ' FCFA)');
   END IF;
 
-  -- 💰 Solde total du wallet
   IF COALESCE(v_wallet.balance, 0) < p_amount THEN
     RETURN jsonb_build_object('success', false, 'error', 'Solde insuffisant pour ce retrait');
   END IF;
 
-  -- 💸 Débit UNIQUE à la demande (aucun second débit au passage à 'paid')
+  -- 💰 Débit UNIQUE à la demande (montant réservé immédiatement).
   UPDATE wallets
   SET balance = balance - p_amount, updated_at = NOW()
-  WHERE user_id = p_user_id;
+  WHERE id = v_wallet.id;
 
   INSERT INTO withdrawals (user_id, amount, method, account_info, status)
   VALUES (p_user_id, p_amount, p_method, p_account_info, 'pending')
@@ -2424,164 +2570,100 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL;
   END;
 
-  RETURN jsonb_build_object('success', true, 'withdrawal_id', v_withdrawal_id, 'withdrawable_amount', v_withdrawable);
+  RETURN jsonb_build_object('success', true);
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.submit_withdrawal(uuid, numeric, text, text) TO authenticated;
+
 -- ============================================================
--- 6. GET WITHDRAWABLE AMOUNT : calcul cohérent (gains - retraits - services)
+-- PARRAINAGE : 10% DES GAINS DU FILLEUL (crédité automatiquement)
 -- ============================================================
-CREATE OR REPLACE FUNCTION get_withdrawable_amount(
-  p_user_id UUID
+-- Le parrain n'est PLUS crédité à l'inscription (plus de 500 FCFA fixe).
+-- À CHAQUE gain validé du filleul, le parrain reçoit 10% du montant :
+--   · filleul gagne 5 000  → parrain +500
+--   · filleul gagne 10 000 → parrain +1 000
+-- Anti-doublon : 1 crédit par soumission (reference 'referral_<submission_id>').
+CREATE OR REPLACE FUNCTION public.credit_referral_commission(
+  p_user_id UUID,        -- id du filleul qui vient de gagner
+  p_amount NUMERIC,      -- gain du filleul (récompense de la tâche)
+  p_source_id UUID       -- id de la soumission (source du gain)
 )
-RETURNS JSONB
+RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, auth
 AS $$
 DECLARE
-  v_wallet RECORD;
-  v_withdrawable DECIMAL;
+  v_referrer_id uuid := NULL;
+  v_commission numeric := 0;
+  v_wallet_id uuid := NULL;
+  v_referred_exists boolean := false;
 BEGIN
-  -- 🔒 Vérification : seul l'utilisateur connecté peut consulter son propre montant
-  IF auth.uid() IS NULL OR auth.uid() != p_user_id THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
-  END IF;
-
-  SELECT * INTO v_wallet FROM wallets WHERE user_id = p_user_id;
-  IF v_wallet IS NULL THEN
-    RETURN jsonb_build_object('success', true, 'withdrawable_amount', 0);
-  END IF;
-
-  v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
-    - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0)
-    - COALESCE((SELECT SUM(w.amount) FROM withdrawals w WHERE w.user_id = p_user_id AND w.status IN ('pending', 'approved')), 0)
-    - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'service'), 0);
-
-  RETURN jsonb_build_object('success', true, 'withdrawable_amount', GREATEST(v_withdrawable, 0));
-END;
-$$;
--- ============================================================
--- 7. REQUEST WITHDRAWAL FEEXPAY : règles métier + calcul cohérent
--- ============================================================
-CREATE OR REPLACE FUNCTION request_withdrawal_feeexpay(
-  p_user_id UUID,
-  p_amount DECIMAL,
-  p_method TEXT,
-  p_account_info TEXT,
-  p_description TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth
-AS $$
-DECLARE
-  v_wallet wallets%ROWTYPE;
-  v_withdrawable DECIMAL := 0;
-  v_withdrawal_id UUID;
-  v_role TEXT;
-  v_withdrawal_day INTEGER;
-  v_timezone_offset INTEGER;
-  v_investment_duration INTEGER;
-  v_last_investment RECORD;
-BEGIN
-  -- 🔒 Appel réservé au serveur (service_role)
-  v_role := COALESCE(current_setting('request.jwt.claims', true)::jsonb->>'role', '');
-  IF v_role IN ('anon', 'authenticated') THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Non autorisé');
-  END IF;
-
-  IF p_amount IS NULL OR p_amount <= 0 THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Montant invalide');
-  END IF;
-
-  SELECT COALESCE((SELECT s.value::text::integer FROM system_settings s WHERE s.key = 'withdrawal_day'), 5)
-  INTO v_withdrawal_day;
-  SELECT COALESCE((SELECT s.value::text::integer FROM system_settings s WHERE s.key = 'withdrawal_timezone_offset'), 0)
-  INTO v_timezone_offset;
-  SELECT COALESCE((SELECT s.value::text::integer FROM system_settings s WHERE s.key = 'investment_duration_days'), 7)
-  INTO v_investment_duration;
-
-  -- 📅 Jour de retrait (UTC + offset)
-  IF EXTRACT(DOW FROM (NOW() AT TIME ZONE 'UTC') + (v_timezone_offset * INTERVAL '1 hour')) != v_withdrawal_day THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Les retraits ne sont disponibles que le jour configuré');
-  END IF;
-
-  -- ⏳ Délai minimum après le premier investissement
-  SELECT * INTO v_last_investment FROM investments
-  WHERE user_id = p_user_id
-  ORDER BY start_date ASC
+  -- 🔒 Retrouver le parrain du filleul (relation active)
+  SELECT referrer_id INTO v_referrer_id
+  FROM public.referrals
+  WHERE referred_id = p_user_id
   LIMIT 1;
-  IF FOUND THEN
-    IF (NOW() - v_last_investment.start_date) < (v_investment_duration * INTERVAL '1 day') THEN
-      RETURN jsonb_build_object(
-        'success', false,
-        'error', 'Veuillez patienter ' || v_investment_duration || ' jours après votre investissement avant de pouvoir retirer vos gains'
-      );
-    END IF;
+
+  IF v_referrer_id IS NULL THEN
+    RETURN; -- le filleul n'a pas de parrain
   END IF;
 
-  -- 🔒 Verrouiller le wallet (anti course)
-  SELECT * INTO v_wallet FROM wallets WHERE user_id = p_user_id FOR UPDATE;
-  IF NOT FOUND THEN
-    INSERT INTO wallets (user_id, balance, locked_amount)
-    VALUES (p_user_id, 0, 0)
-    RETURNING * INTO v_wallet;
+  -- 💰 Commission = 10% du gain (arrondi à l'unité inférieure)
+  v_commission := FLOOR(COALESCE(p_amount, 0) * 0.10);
+  IF v_commission <= 0 THEN
+    RETURN;
   END IF;
 
-  -- 💰 Montant retirable cohérent (gains - retraits - services)
-  v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
-    - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0)
-    - COALESCE((SELECT SUM(w.amount) FROM withdrawals w WHERE w.user_id = p_user_id AND w.status IN ('pending', 'approved')), 0)
-    - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'service'), 0);
-
-  IF v_withdrawable < p_amount THEN
-    RETURN jsonb_build_object('success', false, 'error',
-      'Solde retirable insuffisant. Seuls vos gains sont retirables (disponible: ' || v_withdrawable::TEXT || ' FCFA)');
+  -- 🔒 Anti-doublon : déjà crédité pour cette soumission ?
+  SELECT EXISTS (
+    SELECT 1 FROM public.wallet_transactions
+    WHERE user_id = v_referrer_id
+      AND type = 'referral'
+      AND reference = 'referral_' || p_source_id::TEXT
+  ) INTO v_referred_exists;
+  IF v_referred_exists THEN
+    RETURN;
   END IF;
 
-  IF COALESCE(v_wallet.balance, 0) < p_amount THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Solde insuffisant pour ce retrait');
+  -- 💰 Wallet du parrain (créé si manquant)
+  SELECT id INTO v_wallet_id FROM public.wallets WHERE user_id = v_referrer_id;
+  IF v_wallet_id IS NULL THEN
+    INSERT INTO public.wallets (user_id, balance, locked_amount)
+    VALUES (v_referrer_id, 0, 0)
+    RETURNING id INTO v_wallet_id;
   END IF;
 
-  -- 💸 Débit UNIQUE + demande + transaction (ATOMIQUE)
-  UPDATE wallets
-  SET balance = balance - p_amount,
+  -- 💸 Créditer le parrain (balance + gains retirables)
+  UPDATE public.wallets
+  SET balance = balance + v_commission,
+      total_earnings = total_earnings + v_commission,
       updated_at = NOW()
-  WHERE id = v_wallet.id;
+  WHERE id = v_wallet_id;
 
-  INSERT INTO withdrawals (user_id, amount, method, account_info, status)
-  VALUES (p_user_id, p_amount, p_method, p_account_info, 'pending')
-  RETURNING id INTO v_withdrawal_id;
-
-  INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status, reference)
-  VALUES (p_user_id, v_wallet.id, -p_amount, 'withdrawal',
-          COALESCE(p_description, 'Retrait via ' || p_method), 'pending', v_withdrawal_id);
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'withdrawal_id', v_withdrawal_id,
-    'withdrawable_amount', v_withdrawable
+  -- 📒 Traçabilité
+  INSERT INTO public.wallet_transactions (
+    user_id, wallet_id, amount, type, description, status, reference
+  )
+  VALUES (
+    v_referrer_id, v_wallet_id, v_commission, 'referral',
+    '10% des gains de votre filleul', 'completed',
+    'referral_' || p_source_id::TEXT
   );
+
+  -- 🔔 Notification
+  BEGIN
+    INSERT INTO public.notifications (user_id, title, message, type)
+    VALUES (
+      v_referrer_id, 'Commission de parrainage 🎉',
+      'Votre filleul a gagné ' || FLOOR(COALESCE(p_amount, 0))::TEXT || ' FCFA — vous recevez ' || v_commission::TEXT || ' FCFA (10%).',
+      'referral'
+    );
+  EXCEPTION WHEN OTHERS THEN NULL;
+  END;
 END;
 $$;
 
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
-GRANT EXECUTE ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
-
--- ============================================================
--- 8. PRIVILÈGES D'EXÉCUTION des fonctions corrigées
--- ============================================================
-GRANT EXECUTE ON FUNCTION activate_plan(UUID, UUID, DECIMAL) TO authenticated;
-GRANT EXECUTE ON FUNCTION submit_withdrawal(UUID, DECIMAL, TEXT, TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION submit_deposit(UUID, DECIMAL, TEXT, TEXT, TEXT) TO authenticated;
-GRANT EXECUTE ON FUNCTION get_withdrawable_amount(UUID) TO authenticated;
--- 🔒 Défense en profondeur : réserver les RPC financières user-facing au rôle
---    authenticated (l'anon ne doit PAS pouvoir les appeler).
-REVOKE ALL ON FUNCTION activate_plan(UUID, UUID, DECIMAL) FROM PUBLIC;
-REVOKE ALL ON FUNCTION submit_withdrawal(UUID, DECIMAL, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION submit_deposit(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION get_withdrawable_amount(UUID) FROM PUBLIC;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.credit_referral_commission(uuid, numeric, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.credit_referral_commission(uuid, numeric, uuid) TO service_role;

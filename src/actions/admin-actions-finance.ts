@@ -5,59 +5,7 @@ import { requireAdmin } from "./admin-actions-helpers";
 import { revalidatePath } from "next/cache";
 
 
-// ============ DEPOSITS ============
-
-export async function getDeposits() {
-  const admin = await requireAdmin();
-  if (!admin) return [];
-  // Utiliser le client admin (service role) pour contourner les problèmes de session
-  const adminClient = createAdminClient();
-  const supabase = adminClient || (await createClient());
-  if (!supabase) return [];
-
-  // 1. Récupérer les dépôts SANS jointure (deposits.user_id → auth.users, pas profiles)
-  const { data: deposits, error } = await supabase
-    .from("deposits")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(100);
-
-  if (error) {
-    console.error("getDeposits error:", error);
-    return [];
-  }
-
-  // 2. Récupérer les profils séparément
-  const userIds = (deposits || []).map((d: any) => d.user_id);
-  if (userIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("user_id, full_name, username")
-      .in("user_id", userIds);
-    const profileMap = new Map((profiles || []).map((p: any) => [p.user_id, p]));
-    return (deposits || []).map((d: any) => ({
-      ...d,
-      profiles: profileMap.get(d.user_id) || { full_name: null, username: null },
-    }));
-  }
-
-  return deposits || [];
-}
-
-export async function validateDepositAction(depositId: string, approve: boolean, comment?: string) {
-  const admin = await requireAdmin();
-  if (!admin) return { success: false, error: "Non autorisé" };
-  const supabase = await createClient();
-  if (!supabase) return { success: false, error: "Supabase non configuré" };
-  const { data } = await supabase.rpc("validate_deposit", {
-    p_deposit_id: depositId,
-    p_admin_id: admin.id,
-    p_approve: approve,
-    p_comment: comment || null,
-  });
-  revalidatePath("/admin/deposits");
-  return data;
-}
+// ============ (LE MODULE DÉPÔTS A ÉTÉ SUPPRIMÉ — plateforme 100% gratuite) ============
 
 // ============ WITHDRAWALS ============
 
@@ -165,7 +113,7 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
       console.error("Payout error:", e);
       // Si le payout échoue (solde insuffisant, etc.) → approuver le retrait
       // (pas "paid") pour que l'admin puisse réessayer sans risquer un double paiement.
-      const { data: approvedData, error: approvedError } = await supabase.rpc("validate_withdrawal", {
+      const { error: approvedError } = await supabase.rpc("validate_withdrawal", {
         p_withdrawal_id: withdrawalId,
         p_admin_id: admin.id,
         p_status: "approved",

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { getUsers, banUserAction, deleteUserAction, getPlans } from "@/actions/admin-actions";
+import { getUsers, banUserAction, deleteUserAction } from "@/actions/admin-actions";
 
 interface UserData {
   user_id: string;
@@ -23,18 +23,6 @@ interface UserData {
   profile_id: string;
   balance: number;
   total_earnings: number;
-  invested_capital: number;
-  locked_amount: number;
-  plan: {
-    id: string;
-    name: string;
-    slug: string;
-    amount: number;
-    start_date: string;
-    end_date: string;
-  } | null;
-  deposit_count: number;
-  total_deposits: number;
   withdrawal_count: number;
   total_withdrawals: number;
   tasks_completed: number;
@@ -43,20 +31,18 @@ interface UserData {
 export default function AdminUsersPage() {
   const router = useRouter();
   const [users, setUsers] = useState<UserData[]>([]);
-  const [plans, setPlans] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const [filterPeriod, setFilterPeriod] = useState<"all" | "today" | "week" | "month" | "year">("all");
 
-  const loadUsers = async (planSlug?: string) => {
+  const loadUsers = async () => {
     setRefreshing(true);
     try {
       // Charger UNIQUEMENT les vrais utilisateurs depuis la base de données
-      const data = await getUsers(planSlug);
+      const data = await getUsers();
       setUsers(data || []);
     } catch (e) {
       console.error("Failed to load users", e);
@@ -67,24 +53,18 @@ export default function AdminUsersPage() {
   };
 
   useEffect(() => {
-    getPlans(true).then((data) => setPlans(data || []));
     loadUsers();
   }, []);
 
-  const handlePlanFilter = (slug: string) => {
-    setSelectedPlan(slug);
-    loadUsers(slug === "all" ? undefined : slug);
-  };
-
   const handleBan = async (userId: string, ban: boolean) => {
     await banUserAction(userId, ban);
-    loadUsers(selectedPlan === "all" ? undefined : selectedPlan);
+    loadUsers();
   };
 
   const handleDelete = async (userId: string) => {
     if (!confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.")) return;
     await deleteUserAction(userId);
-    loadUsers(selectedPlan === "all" ? undefined : selectedPlan);
+    loadUsers();
   };
 
   const filtered = users.filter((u) => {
@@ -115,33 +95,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
 
-        {/* Plan Filter */}
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          <button
-            onClick={() => handlePlanFilter("all")}
-            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-              selectedPlan === "all"
-                ? "bg-purple-600 text-white"
-                : "bg-white dark:bg-[#161616] text-[#8A8A8A] hover:bg-gray-50 dark:hover:bg-white/5"
-            }`}
-          >
-            Tous
-          </button>
-          {plans.map((plan) => (
-            <button
-              key={plan.id}
-              onClick={() => handlePlanFilter(plan.slug)}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                selectedPlan === plan.slug
-                  ? "bg-purple-600 text-white"
-                  : "bg-white dark:bg-[#161616] text-[#8A8A8A] hover:bg-gray-50 dark:hover:bg-white/5"
-              }`}
-            >
-              {plan.name}
-            </button>
-          ))}
-        </div>
-
+        {/* Recherche + période */}
         <div className="flex flex-col md:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8A8A8A]" />
@@ -194,9 +148,7 @@ export default function AdminUsersPage() {
                   <thead className="border-b border-gray-100 dark:border-gray-800">
                     <tr className="text-left text-[#8A8A8A]">
                       <th className="p-4 font-medium">Utilisateur</th>
-                      <th className="p-4 font-medium">Pack</th>
                       <th className="p-4 font-medium">Wallet</th>
-                      <th className="p-4 font-medium">Dépôts</th>
                       <th className="p-4 font-medium">Retraits</th>
                       <th className="p-4 font-medium">Tâches</th>
                       <th className="p-4 font-medium">Statut</th>
@@ -208,7 +160,7 @@ export default function AdminUsersPage() {
                       <tr key={u.user_id} className="border-b border-gray-50 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-white/5">
                         <td className="p-4">
                           <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${u.is_banned ? "from-red-500 to-red-600" : u.plan ? "from-purple-500 to-purple-600" : "from-gray-400 to-gray-500"} flex items-center justify-center text-white font-bold text-xs`}>
+                            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${u.is_banned ? "from-red-500 to-red-600" : "from-purple-500 to-purple-600"} flex items-center justify-center text-white font-bold text-xs`}>
                               {(u.full_name || u.email || "U").charAt(0).toUpperCase()}
                             </div>
                             <div>
@@ -222,25 +174,9 @@ export default function AdminUsersPage() {
                           </div>
                         </td>
                         <td className="p-4">
-                          {u.plan ? (
-                            <span className="text-xs px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300">
-                              {u.plan.name}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-[#8A8A8A]">—</span>
-                          )}
-                        </td>
-                        <td className="p-4">
                           <div className="space-y-1">
                             <p className="font-medium">{formatCurrency(u.balance)}</p>
                             <p className="text-xs text-green-500">Gains: {formatCurrency(u.total_earnings)}</p>
-                            <p className="text-xs text-[#8A8A8A]">Bloqué: {formatCurrency(u.locked_amount)}</p>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <div className="space-y-1">
-                            <p className="font-medium">{u.deposit_count}</p>
-                            <p className="text-xs text-green-500">{formatCurrency(u.total_deposits)}</p>
                           </div>
                         </td>
                         <td className="p-4">

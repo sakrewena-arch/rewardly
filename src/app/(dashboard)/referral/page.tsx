@@ -30,6 +30,15 @@ export default function ReferralPage() {
         .eq("referrer_id", user.id)
         .order("created_at", { ascending: false });
 
+      // Total réel gagné via le parrainage : somme des transactions type 'referral'
+      const { data: referralTx } = await supabase
+        .from("wallet_transactions")
+        .select("amount")
+        .eq("user_id", user.id)
+        .eq("type", "referral")
+        .eq("status", "completed");
+      const realTotal = (referralTx || []).reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
       if (refData && refData.length > 0) {
         const referredIds = refData.map((r) => r.referred_id);
         const { data: profilesData } = await supabase
@@ -48,11 +57,10 @@ export default function ReferralPage() {
           };
         });
         setReferrals(merged);
-        const total = merged.reduce((sum, r) => sum + (r.commission || 0), 0);
-        setTotalCommission(total);
+        setTotalCommission(realTotal);
       } else {
         setReferrals([]);
-        setTotalCommission(0);
+        setTotalCommission(realTotal);
       }
     };
 
@@ -109,7 +117,7 @@ export default function ReferralPage() {
             </div>
             <div>
               <h2 className="font-bold text-lg">Programme de parrainage</h2>
-              <p className="text-white/70 text-sm">Gagnez des commissions sur vos filleuls</p>
+              <p className="text-white/70 text-sm">Gagnez 10% des gains de vos filleuls</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -258,13 +266,19 @@ export default function ReferralPage() {
                         {(ref.referred?.full_name || ref.referred?.username || "U").charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{ref.referred?.full_name || ref.referred?.username || "Utilisateur"}</p>
-                        <p className="text-xs text-[#8A8A8A]">{ref.status === "paid" ? "Commission payée" : "En attente"}</p>
+                          <p className="text-sm font-medium">{ref.referred?.full_name || ref.referred?.username || "Utilisateur"}</p>
+                          <p className="text-xs text-[#8A8A8A]">Vous gagnez 10% de ses gains</p>
+                        </div>
                       </div>
-                    </div>
-                    <span className={`text-sm font-bold ${ref.status === "paid" ? "text-green-500" : "text-yellow-500"}`}>
-                      +{formatCurrency(ref.commission)}
-                    </span>
+                      {Number(ref.commission) > 0 ? (
+                        <span className="text-sm font-bold text-green-500">
+                          +{formatCurrency(ref.commission)}
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-1 rounded-full bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 font-medium">
+                          10%
+                        </span>
+                      )}
                   </div>
                 ))}
               </div>

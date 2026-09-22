@@ -201,8 +201,8 @@ export default function ServicesPage() {
           </div>
           <div className="flex items-center gap-2">
             <Wallet className="w-6 h-6 text-white/80" />
-            <Button size="sm" className="bg-white/20 hover:bg-white/30 text-white" onClick={() => router.push("/deposit")}>
-              Recharger
+            <Button size="sm" className="bg-white/20 hover:bg-white/30 text-white" onClick={() => router.push("/withdraw")}>
+              Retirer
             </Button>
           </div>
         </div>

@@ -5,13 +5,9 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 /**
  * Génère les notifications de RAPPEL automatiques pour l'utilisateur connecté
  * (appelée une fois par jour depuis le dashboard) :
- *  1. "Tâches du jour" : si l'utilisateur a un pack actif et n'a encore
- *     fait AUCUNE tâche aujourd'hui.
- *  2. "Passer au plan supérieur" : si son pack actif n'est pas Gold.
- *  3. "Dépôt en attente" : s'il a un dépôt pending depuis plus d'1h.
+ *  1. "Tâche du jour" : si l'utilisateur n'a encore fait AUCUNE tâche aujourd'hui.
  *
- * Anti-spam : on n'envoie JAMAIS deux fois le même rappel le même jour
- * (vérification d'une notification similaire déjà créée aujourd'hui).
+ * Anti-spam : on n'envoie JAMAIS deux fois le même rappel le même jour.
  */
 export async function generateDailyRemindersAction() {
   const supabase = await createClient();
@@ -24,27 +20,19 @@ export async function generateDailyRemindersAction() {
   if (!adminClient) return { success: false, error: "Supabase non configuré" };
 
   const today = new Date().toISOString().slice(0, 10);
-  const results = { tasks: 0, upgrade: 0, deposits: 0 };
+  const results = { tasks: 0 };
   const userId = user.id;
 
-  // ============================================================
-  // 1. RAPPEL TÂCHES DU JOUR
-  // ============================================================
-  const { data: activeInvestments } = await adminClient
-    .from("investments")
-    .select("user_id, plans(name, slug)")
+  // 1. RAPPEL TÂCHE DU JOUR (plateforme gratuite : pour TOUS les utilisateurs)
+  // Aucune soumission (approved/pending) créée aujourd'hui ? → rappel.
+  const { data: todaySubmissions } = await adminClient
+    .from("task_submissions")
+    .select("id")
     .eq("user_id", userId)
-    .eq("status", "active");
+    .gte("created_at", `${today}T00:00:00`)
+    .in("status", ["approved", "pending"]);
 
-  if (activeInvestments && activeInvestments.length > 0) {
-    // Aucune soumission (approved/pending) créée aujourd'hui ?
-    const { data: todaySubmissions } = await adminClient
-      .from("task_submissions")
-      .select("id")
-      .eq("user_id", userId)
-      .gte("created_at", `${today}T00:00:00`)
-      .in("status", ["approved", "pending"]);
-
+  if (!todaySubmissions || todaySubmissions.length === 0) {
     // Anti-spam : notification "tâche" déjà envoyée aujourd'hui ?
     const { data: existingTaskNotifs } = await adminClient
       .from("notifications")
@@ -53,75 +41,15 @@ export async function generateDailyRemindersAction() {
       .eq("type", "task")
       .gte("created_at", `${today}T00:00:00`);
 
-    if ((!todaySubmissions || todaySubmissions.length === 0) && (!existingTaskNotifs || existingTaskNotifs.length === 0)) {
-      const planName = (activeInvestments[0] as any)?.plans?.[0]?.name || "votre pack";
+    if (!existingTaskNotifs || existingTaskNotifs.length === 0) {
       await adminClient.from("notifications").insert({
         user_id: userId,
-        title: "📋 Vos tâches vous attendent !",
-        message: `Effectuez vos tâches aujourd'hui pour gagner de l'argent avec votre pack ${planName}. Plus vous en faites, plus vous gagnez !`,
+        title: "📋 Votre tâche du jour vous attend !",
+        message: "Accomplissez votre tâche du jour et gagnez de l'argent gratuitement sur Rewardly !",
         type: "task",
         is_read: false,
       });
       results.tasks++;
-    }
-  }
-
-  // ============================================================
-  // 2. RAPPEL PASSER AU PLAN SUPÉRIEUR (pack non-Gold)
-  // ============================================================
-  const nonGold = activeInvestments?.find(
-    (i: any) => (i.plans as any)?.[0]?.slug !== "gold"
-  );
-
-  if (nonGold) {
-    const { data: existingUpgradeNotifs } = await adminClient
-      .from("notifications")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("type", "promotion")
-      .gte("created_at", `${today}T00:00:00`);
-
-    if (!existingUpgradeNotifs || existingUpgradeNotifs.length === 0) {
-      const planName = (nonGold.plans as any)?.[0]?.name || "votre pack";
-      await adminClient.from("notifications").insert({
-        user_id: userId,
-        title: "🚀 Passez au niveau supérieur !",
-        message: `Vous avez marre d'attendre ? Passez au plan supérieur pour gagner PLUS avec plus de tâches et de meilleures récompenses. Votre pack ${planName} peut être upgradé en 1 clic !`,
-        type: "promotion",
-        is_read: false,
-      });
-      results.upgrade++;
-    }
-  }
-
-  // ============================================================
-  // 3. RAPPEL DÉPÔT EN ATTENTE (pending depuis plus d'1h)
-  // ============================================================
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: pendingDeposits } = await adminClient
-    .from("deposits")
-    .select("amount")
-    .eq("user_id", userId)
-    .eq("status", "pending")
-    .lt("created_at", oneHourAgo);
-
-  if (pendingDeposits && pendingDeposits.length > 0) {
-    const { data: existingDepositNotifs } = await adminClient
-      .from("notifications")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("type", "deposit")
-      .gte("created_at", `${today}T00:00:00`);
-
-    if (!existingDepositNotifs || existingDepositNotifs.length === 0) {
-      await adminClient.from("notifications").insert({
-        user_id: userId,
-        title: "⏳ Dépôt en attente de confirmation",
-        message: `Votre dépôt de ${pendingDeposits[0]?.amount || ""} FCFA est en attente de validation. Il sera crédité dès confirmation par notre équipe.`,
-        type: "deposit",
-        is_read: false,
-      });
-      results.deposits++;
     }
   }
 
@@ -130,39 +58,31 @@ export async function generateDailyRemindersAction() {
 
 /**
  * Envoie des notifications de RAPPEL automatiques à TOUS les utilisateurs.
- * Appelé par la route API /api/notifications/reminders (cron Vercel/GitHub).
+ * Appelé par la route API /api/notifications/reminders (cron Vercel/GitHub Actions).
  *
- * Types de rappels :
- *  1. "Tâches du jour" : utilisateurs avec un pack actif qui n'ont pas encore
- *     effectué de tâche aujourd'hui.
- *  2. "Passer au plan supérieur" : utilisateurs avec un pack actif non-Gold
- *     (relance pour upgrade).
- *  3. "Dépôt en attente" : utilisateurs avec un dépôt pending depuis > 1h.
+ * Rappel : "Tâche du jour" — tous les utilisateurs qui n'ont pas encore
+ * effectué leur tâche aujourd'hui (plateforme gratuite, aucun pack requis).
  *
- * Anti-spam : on n'envoie JAMAIS deux fois le même rappel le même jour
- * (vérification d'une notification similaire créée aujourd'hui).
+ * Anti-spam : on n'envoie JAMAIS deux fois le même rappel le même jour.
  */
 export async function sendReminderNotificationsAction() {
   const adminClient = createAdminClient();
   if (!adminClient) return { success: false, error: "Supabase non configuré" };
 
   const today = new Date().toISOString().slice(0, 10);
-  const results = { tasks: 0, upgrade: 0, deposits: 0 };
+  const results = { tasks: 0 };
 
   // ============================================================
-  // 1. RAPPEL TÂCHES DU JOUR
+  // 1. RAPPEL TÂCHE DU JOUR (TOUS les utilisateurs)
   // ============================================================
-  // Utilisateurs avec un investissement actif qui n'ont AUCUNE soumission
-  // (approved ou pending) créée aujourd'hui.
-  const { data: activeUsers } = await adminClient
-    .from("investments")
-    .select("user_id, plans(name, slug)")
-    .eq("status", "active");
+  const { data: profiles } = await adminClient
+    .from("profiles")
+    .select("user_id");
 
-  if (activeUsers) {
-    const userIds = [...new Set(activeUsers.map((i: any) => i.user_id))];
+  if (profiles && profiles.length > 0) {
+    const userIds = [...new Set(profiles.map((p: any) => p.user_id))];
 
-    // Récupérer les soumissions d'aujourd'hui pour ces utilisateurs
+    // Qui a déjà soumis une tâche aujourd'hui (approved/pending) ?
     const { data: todaySubmissions } = await adminClient
       .from("task_submissions")
       .select("user_id")
@@ -172,7 +92,7 @@ export async function sendReminderNotificationsAction() {
 
     const doneToday = new Set((todaySubmissions || []).map((s: any) => s.user_id));
 
-    // Vérifier anti-spam : notification "tâches" déjà envoyée aujourd'hui
+    // Anti-spam : notification "tâche" déjà envoyée aujourd'hui ?
     const { data: existingTaskNotifs } = await adminClient
       .from("notifications")
       .select("user_id")
@@ -185,95 +105,14 @@ export async function sendReminderNotificationsAction() {
     for (const userId of userIds) {
       if (doneToday.has(userId) || alreadyNotified.has(userId)) continue;
 
-      const investment = activeUsers.find((i: any) => i.user_id === userId);
-      const planName = (investment?.plans as any)?.[0]?.name || "votre pack";
-
       await adminClient.from("notifications").insert({
         user_id: userId,
-        title: "📋 Vos tâches vous attendent !",
-        message: `Effectuez vos tâches aujourd'hui pour gagner de l'argent avec votre pack ${planName}. Plus vous en faites, plus vous gagnez !`,
+        title: "📋 Votre tâche du jour vous attend !",
+        message: "Accomplissez votre tâche du jour et gagnez de l'argent gratuitement sur Rewardly !",
         type: "task",
         is_read: false,
       });
       results.tasks++;
-    }
-  }
-
-  // ============================================================
-  // 2. RAPPEL PASSER AU PLAN SUPÉRIEUR
-  // ============================================================
-  // Utilisateurs avec un pack actif non-Gold (Bronze/Silver) → relance upgrade.
-  const { data: nonGoldInvestments } = await adminClient
-    .from("investments")
-    .select("user_id, plans(name, slug)")
-    .eq("status", "active")
-    .neq("plans.slug", "gold");
-
-  if (nonGoldInvestments) {
-    const userIds = [...new Set(nonGoldInvestments.map((i: any) => i.user_id))];
-
-    const { data: existingUpgradeNotifs } = await adminClient
-      .from("notifications")
-      .select("user_id")
-      .in("user_id", userIds)
-      .eq("type", "promotion")
-      .gte("created_at", `${today}T00:00:00`);
-
-    const alreadyNotified = new Set((existingUpgradeNotifs || []).map((n: any) => n.user_id));
-
-    for (const userId of userIds) {
-      if (alreadyNotified.has(userId)) continue;
-
-      const investment = nonGoldInvestments.find((i: any) => i.user_id === userId);
-      const planName = (investment?.plans as any)?.[0]?.name || "votre pack";
-
-      await adminClient.from("notifications").insert({
-        user_id: userId,
-        title: "🚀 Passez au niveau supérieur !",
-        message: `Vous avez marre d'attendre ? Passez au plan supérieur pour gagner PLUS avec plus de tâches et de meilleures récompenses. Votre pack ${planName} peut être upgradé en 1 clic !`,
-        type: "promotion",
-        is_read: false,
-      });
-      results.upgrade++;
-    }
-  }
-
-  // ============================================================
-  // 3. RAPPEL DÉPÔT EN ATTENTE
-  // ============================================================
-  // Dépôts pending créés il y a plus d'1 heure → rappel de validation.
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: pendingDeposits } = await adminClient
-    .from("deposits")
-    .select("user_id, amount")
-    .eq("status", "pending")
-    .lt("created_at", oneHourAgo);
-
-  if (pendingDeposits) {
-    const userIds = [...new Set(pendingDeposits.map((d: any) => d.user_id))];
-
-    const { data: existingDepositNotifs } = await adminClient
-      .from("notifications")
-      .select("user_id")
-      .in("user_id", userIds)
-      .eq("type", "deposit")
-      .gte("created_at", `${today}T00:00:00`);
-
-    const alreadyNotified = new Set((existingDepositNotifs || []).map((n: any) => n.user_id));
-
-    for (const userId of userIds) {
-      if (alreadyNotified.has(userId)) continue;
-
-      const deposit = pendingDeposits.find((d: any) => d.user_id === userId);
-
-      await adminClient.from("notifications").insert({
-        user_id: userId,
-        title: "⏳ Dépôt en attente de confirmation",
-        message: `Votre dépôt de ${deposit?.amount || ""} FCFA est en attente de validation. Il sera crédité dès confirmation par notre équipe.`,
-        type: "deposit",
-        is_read: false,
-      });
-      results.deposits++;
     }
   }
 

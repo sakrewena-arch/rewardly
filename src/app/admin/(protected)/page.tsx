@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Users, DollarSign, CheckSquare, TrendingUp, ArrowUpRight, Settings, Shield, Bell, Activity, Wallet, Clock, BadgeCheck, Megaphone } from "lucide-react";
+import { Users, CheckSquare, TrendingUp, ArrowUpRight, Settings, Bell, Activity, Wallet, Clock, BadgeCheck, Megaphone } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
@@ -11,20 +11,11 @@ import { getPlatformStats } from "@/actions/admin-actions";
 
 interface PlatformStats {
   total_users: number;
-  total_deposits: number;
+  total_tasks: number;
   total_withdrawals: number;
   total_earnings: number;
-  total_investments: number;
-  pending_deposits: number;
   pending_withdrawals: number;
   pending_submissions: number;
-  plans_with_users: Array<{
-    plan_id: string;
-    plan_name: string;
-    plan_slug: string;
-    plan_price: number;
-    user_count: number;
-  }>;
 }
 
 export default function AdminPage() {
@@ -41,10 +32,8 @@ export default function AdminPage() {
 
   const adminMenu = [
     { icon: Users, label: "Utilisateurs", href: "/admin/users", desc: "Gérer les utilisateurs", color: "from-blue-500 to-blue-600" },
-    { icon: DollarSign, label: "Dépôts", href: "/admin/deposits", desc: "Dépôts effectués", color: "from-green-500 to-green-600" },
     { icon: TrendingUp, label: "Retraits", href: "/admin/withdrawals", desc: "Gérer les retraits", color: "from-orange-500 to-orange-600" },
     { icon: CheckSquare, label: "Tâches", href: "/admin/tasks", desc: "Créer et gérer les tâches", color: "from-purple-500 to-purple-600" },
-    { icon: Shield, label: "Packs", href: "/admin/plans", desc: "Gérer les packs", color: "from-cyan-500 to-cyan-600" },
     { icon: Bell, label: "Notifications", href: "/admin/notifications", desc: "Notifications push", color: "from-pink-500 to-pink-600" },
     { icon: Settings, label: "Paramètres", href: "/admin/settings", desc: "Configuration", color: "from-gray-500 to-gray-600" },
     { icon: Activity, label: "Analytics", href: "/admin/analytics", desc: "Statistiques", color: "from-indigo-500 to-indigo-600" },
@@ -91,11 +80,11 @@ export default function AdminPage() {
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-500/20 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-green-500" />
+                    <CheckSquare className="w-5 h-5 text-green-500" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold">{formatCurrency(stats?.total_deposits ?? 0)}</p>
-                <p className="text-xs text-[#8A8A8A] mt-0.5">Dépôts validés</p>
+                <p className="text-2xl font-bold">{stats?.total_tasks ?? 0}</p>
+                <p className="text-xs text-[#8A8A8A] mt-0.5">Tâches</p>
               </Card>
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -112,17 +101,13 @@ export default function AdminPage() {
                     <Wallet className="w-5 h-5 text-purple-500" />
                   </div>
                 </div>
-                <p className="text-2xl font-bold">{formatCurrency(stats?.total_investments ?? 0)}</p>
-                <p className="text-xs text-[#8A8A8A] mt-0.5">Capital investi</p>
+                <p className="text-2xl font-bold">{formatCurrency(stats?.total_earnings ?? 0)}</p>
+                <p className="text-xs text-[#8A8A8A] mt-0.5">Gains totaux</p>
               </Card>
             </div>
 
             {/* Pending Approvals */}
-            <div className="grid grid-cols-3 gap-4">
-              <Card className={`p-4 ${(stats?.pending_deposits ?? 0) > 0 ? "border-yellow-300 dark:border-yellow-500/30" : ""}`}>
-                <p className="text-3xl font-bold text-yellow-500">{stats?.pending_deposits ?? 0}</p>
-                <p className="text-xs text-[#8A8A8A] mt-1">Dépôts en attente</p>
-              </Card>
+            <div className="grid grid-cols-2 gap-4">
               <Card className={`p-4 ${(stats?.pending_withdrawals ?? 0) > 0 ? "border-yellow-300 dark:border-yellow-500/30" : ""}`}>
                 <p className="text-3xl font-bold text-orange-500">{stats?.pending_withdrawals ?? 0}</p>
                 <p className="text-xs text-[#8A8A8A] mt-1">Retraits en attente</p>
@@ -132,28 +117,6 @@ export default function AdminPage() {
                 <p className="text-xs text-[#8A8A8A] mt-1">Validations de tâches</p>
               </Card>
             </div>
-
-            {/* Users per Plan */}
-            {stats?.plans_with_users && stats.plans_with_users.length > 0 && (
-              <Card>
-                <CardContent className="p-5">
-                  <h2 className="font-semibold mb-4">Utilisateurs par pack</h2>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {stats.plans_with_users.map((plan) => (
-                      <div key={plan.plan_id} className="p-4 bg-gray-50 dark:bg-white/5 rounded-xl">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Shield className="w-4 h-4 text-purple-500" />
-                          <span className="font-semibold">{plan.plan_name}</span>
-                        </div>
-                        <p className="text-3xl font-bold">{plan.user_count}</p>
-                        <p className="text-xs text-[#8A8A8A] mt-1">utilisateurs actifs</p>
-                        <p className="text-xs text-purple-500 mt-1">{formatCurrency(plan.plan_price)} / pack</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </>
         )}
 

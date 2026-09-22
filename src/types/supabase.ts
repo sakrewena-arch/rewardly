@@ -239,6 +239,7 @@ export interface Database {
           image_url: string | null;
           icon: string | null;
           amount: number;
+          amount_label: string | null;
           estimated_time: number | null;
           instructions: string | null;
           link: string | null;
@@ -259,6 +260,7 @@ export interface Database {
           image_url?: string | null;
           icon?: string | null;
           amount: number;
+          amount_label?: string | null;
           estimated_time?: number | null;
           instructions?: string | null;
           link?: string | null;
@@ -279,6 +281,7 @@ export interface Database {
           image_url?: string | null;
           icon?: string | null;
           amount?: number;
+          amount_label?: string | null;
           estimated_time?: number | null;
           instructions?: string | null;
           link?: string | null;

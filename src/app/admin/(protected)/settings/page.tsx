@@ -17,9 +17,7 @@ export default function AdminSettingsPage() {
     platform_name: "Rewardly",
     min_withdrawal: "5000",
     withdrawal_day: "5",
-    investment_duration_days: "7",
-    referral_commission_fixed: "500",
-    referral_commission_percent: "5",
+    referral_commission_percent: "10",
     max_referrals: "50",
     maintenance_mode: "false",
   });
@@ -31,9 +29,7 @@ export default function AdminSettingsPage() {
           platform_name: String(data.platform_name || "Rewardly").replace(/"/g, ""),
           min_withdrawal: String(data.min_withdrawal || "5000").replace(/"/g, ""),
           withdrawal_day: String(data.withdrawal_day || "5").replace(/"/g, ""),
-          investment_duration_days: String(data.investment_duration_days || "7").replace(/"/g, ""),
-          referral_commission_fixed: String(data.referral_commission_fixed || "500").replace(/"/g, ""),
-          referral_commission_percent: String(data.referral_commission_percent || "5").replace(/"/g, ""),
+          referral_commission_percent: String(data.referral_commission_percent || "10").replace(/"/g, ""),
           max_referrals: String(data.max_referrals || "50").replace(/"/g, ""),
           maintenance_mode: String(data.maintenance_mode || "false").replace(/"/g, ""),
         });
@@ -48,8 +44,6 @@ export default function AdminSettingsPage() {
       platform_name: JSON.stringify(settings.platform_name),
       min_withdrawal: settings.min_withdrawal,
       withdrawal_day: settings.withdrawal_day,
-      investment_duration_days: settings.investment_duration_days,
-      referral_commission_fixed: settings.referral_commission_fixed,
       referral_commission_percent: settings.referral_commission_percent,
       max_referrals: settings.max_referrals,
       maintenance_mode: settings.maintenance_mode,
@@ -106,10 +100,6 @@ export default function AdminSettingsPage() {
                     <label className="text-xs text-[#8A8A8A]">Jour de retrait (0=Dim, 5=Vendredi)</label>
                     <Input value={settings.withdrawal_day} onChange={(e) => setSettings({ ...settings, withdrawal_day: e.target.value })} />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-[#8A8A8A]">Durée d'investissement (jours)</label>
-                    <Input value={settings.investment_duration_days} onChange={(e) => setSettings({ ...settings, investment_duration_days: e.target.value })} />
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -119,12 +109,9 @@ export default function AdminSettingsPage() {
                 <h2 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Parrainage</h2>
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-xs text-[#8A8A8A]">Commission fixe (FCFA)</label>
-                    <Input value={settings.referral_commission_fixed} onChange={(e) => setSettings({ ...settings, referral_commission_fixed: e.target.value })} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-[#8A8A8A]">Commission (%)</label>
+                    <label className="text-xs text-[#8A8A8A]">Pourcentage parrainage</label>
                     <Input value={settings.referral_commission_percent} onChange={(e) => setSettings({ ...settings, referral_commission_percent: e.target.value })} />
+                    <p className="text-[10px] text-[#8A8A8A]">Le parrain reçoit ce % des gains de chaque filleul, crédité automatiquement.</p>
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-[#8A8A8A]">Maximum de filleuls</label>

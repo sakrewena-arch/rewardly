@@ -31,21 +31,10 @@ export const resetPasswordSchema = z.object({
 // FINANCIAL VALIDATIONS
 // ============================================================
 
-export const depositSchema = z.object({
-  amount: z.number().min(100, "Le montant minimum est de 100 FCFA"),
-  method: z.string().min(1, "Veuillez choisir une méthode de paiement"),
-  reference: z.string().optional(),
-});
-
 export const withdrawalSchema = z.object({
   amount: z.number().min(5000, "Le montant minimum de retrait est de 5 000 FCFA"),
   method: z.string().min(1, "Veuillez choisir une méthode de retrait"),
   accountInfo: z.string().min(3, "Veuillez entrer vos informations de compte"),
-});
-
-export const activatePlanSchema = z.object({
-  planId: z.string().uuid("Plan invalide"),
-  amount: z.number().positive("Montant invalide"),
 });
 
 // ============================================================
@@ -56,6 +45,7 @@ export const createTaskSchema = z.object({
   title: z.string().min(3, "Le titre doit contenir au moins 3 caractères"),
   description: z.string().optional(),
   amount: z.number().positive("La récompense doit être positive"),
+  amount_label: z.string().optional(),
   plan_id: z.string().nullable(),
   category_id: z.string().optional(),
   icon: z.string().optional(),
@@ -83,22 +73,6 @@ export const submitTaskSchema = z.object({
 });
 
 // ============================================================
-// PLAN VALIDATIONS
-// ============================================================
-
-export const createPlanSchema = z.object({
-  name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
-  slug: z.string().min(2, "Le slug doit contenir au moins 2 caractères").regex(/^[a-z0-9-]+$/, "Slug invalide (minuscules, chiffres, tirets)"),
-  price: z.number().positive("Le prix doit être positif"),
-  daily_tasks: z.number().int("Nombre entier requis"),
-  min_profitability: z.number().min(0).max(100),
-  max_profitability: z.number().min(0).max(100),
-  color: z.string().optional(),
-  icon: z.string().optional(),
-  badge: z.string().optional(),
-});
-
-// ============================================================
 // SETTINGS VALIDATIONS
 // ============================================================
 
@@ -106,7 +80,6 @@ export const systemSettingsSchema = z.object({
   platform_name: z.string().min(1),
   min_withdrawal: z.string().regex(/^\d+$/, "Nombre requis"),
   withdrawal_day: z.string().regex(/^[0-6]$/, "Jour invalide (0-6)"),
-  investment_duration_days: z.string().regex(/^\d+$/, "Nombre requis"),
   referral_commission_fixed: z.string().regex(/^\d+$/, "Nombre requis"),
   referral_commission_percent: z.string().regex(/^\d+$/, "Nombre requis"),
   max_referrals: z.string().regex(/^\d+$/, "Nombre requis"),
@@ -130,7 +103,5 @@ export const updateProfileSchema = z.object({
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
-export type DepositInput = z.infer<typeof depositSchema>;
 export type WithdrawalInput = z.infer<typeof withdrawalSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
-export type CreatePlanInput = z.infer<typeof createPlanSchema>;

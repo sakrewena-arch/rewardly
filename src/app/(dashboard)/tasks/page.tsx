@@ -1,11 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Clock, Search, Lock, CheckCircle, Info, Sparkles, Check, ArrowRight, Crown, Star, Zap, Upload, Link2, Type, Hash, Image, Video, MessageCircle, Send, ExternalLink, X, Share2, Eye } from "lucide-react";
+import { Clock, Search, Lock, CheckCircle, Info, Sparkles, Check, Upload, Link2, Video, ExternalLink, X, Share2, Eye, AlertCircle, ListChecks } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatTaskReward } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useTasks } from "@/hooks/useTasks";
 import { useAuth } from "@/context/AuthContext";
@@ -13,12 +13,6 @@ import { useRouter } from "next/navigation";
 import { submitTaskAction } from "@/actions/user-actions";
 import { getTaskFields } from "@/actions/admin-actions";
 import { useNav } from "@/context/NavContext";
-
-const availablePlans = [
-  { name: "Bronze", slug: "bronze", price: 5000, tasks: "1 tâche/jour", profitability: "10% - 20%", badge: "Bronze", color: "from-amber-700 to-amber-600", badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-500/20" },
-  { name: "Silver", slug: "silver", price: 10000, tasks: "3 tâches/jour", profitability: "20% - 30%", badge: "Silver", color: "from-gray-400 to-gray-300", badgeColor: "bg-gray-100 text-gray-600 dark:bg-gray-500/20" },
-  { name: "Gold", slug: "gold", price: 20000, tasks: "Toutes les tâches", profitability: "40% - 50%", badge: "Premium", color: "from-yellow-500 to-yellow-400", badgeColor: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20" },
-];
 
 interface TaskField {
   id: string;
@@ -32,7 +26,7 @@ interface TaskField {
 export default function TasksPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { tasks, allTasks, investment, isLoading, hasPack, userPlanSlug, dailyLimit, isUnlimited, completedToday, totalPlanTasks, completeTask, addSubmission, allTasksCompleted } = useTasks();
+  const { tasks, allTasks, isLoading, dailyLimit, completedToday, totalPlanTasks, completeTask, addSubmission } = useTasks();
   const [search, setSearch] = useState("");
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState<string | null>(null);
@@ -42,10 +36,8 @@ export default function TasksPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  // Also check localStorage directly for plan slug
-  const localPlanSlug = typeof window !== "undefined" ? localStorage.getItem("rewardly_plan_slug") : null;
-  const effectivePlanSlug = userPlanSlug || localPlanSlug;
+  // Tâche dont le panneau "Instructions" (bottom sheet) est ouvert
+  const [bottomSheetTask, setBottomSheetTask] = useState<any>(null);
 
   const filteredTasks = tasks.filter((task) =>
     task.title.toLowerCase().includes(search.toLowerCase())
@@ -72,6 +64,7 @@ export default function TasksPage() {
     taskId: string;
     title: string;
     amount: number;
+    amountLabel: string;
     link: string;
     mediaType: "" | "image" | "video";
     mediaData: string;
@@ -107,12 +100,12 @@ export default function TasksPage() {
   const { hideNav, showNav } = useNav();
 
   useEffect(() => {
-    if (showTaskModal || shareModalOpen) {
+    if (showTaskModal || shareModalOpen || bottomSheetTask) {
       hideNav(true);
     } else {
       showNav();
     }
-  }, [showTaskModal, shareModalOpen, hideNav, showNav]);
+  }, [showTaskModal, shareModalOpen, bottomSheetTask, hideNav, showNav]);
 
   // Parse [SHARE] info from task instructions
   const parseShareInfo = (task: any) => {
@@ -142,6 +135,7 @@ export default function TasksPage() {
       taskId: task.id,
       title: task.title,
       amount: task.amount,
+      amountLabel: task.amount_label || "",
       link: task.link || "",
       mediaType: media?.type || "",
       mediaData: media?.data || "",
@@ -169,9 +163,11 @@ export default function TasksPage() {
     if (!shareModal) return;
     const newCount = shareModal.shareCount + 1;
     setShareModal({ ...shareModal, shareCount: newCount });
-    // If target reached, move to "watch" step (must watch media before validating)
+    // If target reached, go to "watch" step ONLY if there is a media to watch,
+    // otherwise jump directly to validation.
     if (newCount >= shareModal.targetCount) {
-      setShareModal({ ...shareModal, shareCount: newCount, step: "watch" });
+      const nextStep = shareModal.mediaData ? "watch" : "complete";
+      setShareModal({ ...shareModal, shareCount: newCount, step: nextStep });
     }
   };
 
@@ -261,7 +257,7 @@ export default function TasksPage() {
     await new Promise((r) => setTimeout(r, 1000));
 
     // ✅ Crédit UNIQUEMENT via la RPC submit_task (atomique côté serveur :
-    //    vérifie pack actif, anti-double soumission, limite quotidienne,
+    //    vérifie la limite de 1 tâche/jour, anti-double soumission,
     //    puis crédite le wallet + crée la transaction).
     //    Plus AUCUN fallback de crédit direct côté client (RLS désormais
     //    verrouillée) — on évite ainsi tout crédit injustifié ou double crédit.
@@ -275,7 +271,7 @@ export default function TasksPage() {
       setShowSuccess(taskId);
       setTimeout(() => setShowSuccess(null), 3000);
     } else {
-      // RPC échouée (pack expiré, limite atteinte, déjà accomplie...) →
+      // RPC échouée (limite du jour atteinte, déjà accomplie...) →
       // on affiche l'erreur au lieu de créditer manuellement.
       console.error("submitTaskAction failed:", result?.error);
       setSubmitError(result?.error || "Impossible de valider cette tâche. Veuillez réessayer.");
@@ -313,6 +309,121 @@ export default function TasksPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // ============================================================
+  // PANNEAU "INSTRUCTIONS" (bottom sheet)
+  // ============================================================
+
+  // Nettoyer les instructions des balises techniques [MEDIA]/[SHARE]
+  // et des lignes "NB" (avertissements) qui sont affichées séparément.
+  const NB_LINE_PATTERN = /^(NB|N\.?\s*B\.?)\s*[:.\-–—]?\s*/i;
+
+  const getCleanInstructions = (task: any) => {
+    return (task?.instructions || "")
+      .replace(/\[SHARE\] app=\w+ target=\w+ count=\d+\n?/g, "")
+      .replace(/\[MEDIA\] type=\w+ data=data:[^\s]+\n?/g, "")
+      .split("\n")
+      .map((l: string) => l.trim())
+      .filter((l: string) => l && !NB_LINE_PATTERN.test(l))
+      .join("\n")
+      .trim();
+  };
+
+  // Lignes "NB:" → choses à éviter, affichées dans un encadré rouge bien visible
+  const getNbLines = (task: any) => {
+    if (!task?.instructions) return [];
+    return (task.instructions as string)
+      .split("\n")
+      .map((l: string) => l.trim())
+      .filter((l: string) => l && NB_LINE_PATTERN.test(l));
+  };
+
+  // Mots-clés qui signalent une information importante (surlignée)
+  const IMPORTANT_WORDS = [
+    "important", "obligatoire", "requis", "attention", "avertissement",
+    "ne pas", "n'oubliez", "n'oublie", "vérifiez", "verifiez", "confirmez",
+    "code", "numéro", "numero", "téléphone", "telephone", "lien", "cliquez",
+    "ouvrez", "partagez", "groupe", "groupes", "contact", "inscription",
+    "abonnement", "suivez", "rendez-vous", "doit", "devrez", "garantir",
+    "impératif", "imperatif", "⚠", "! ",
+  ];
+
+  // Rendu mis en forme d'une ligne : liens cliquables, numéros et valeurs
+  // entre guillemets mis en couleur (soulignés / gras).
+  const renderRichText = (text: string) => {
+    const parts: React.ReactNode[] = [];
+    const pattern = /(https?:\/\/[^\s]+|www\.[^\s]+|\+?\d[\d\s.-]{7,}|"[^"]+")/g;
+    pattern.lastIndex = 0;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    let k = 0;
+    while ((m = pattern.exec(text)) !== null) {
+      if (m.index > last) parts.push(text.slice(last, m.index));
+      const token = m[0];
+      if (/^(https?:\/\/|www\.)/.test(token)) {
+        parts.push(
+          <a
+            key={`u${k++}`}
+            href={/^https?:/.test(token) ? token : `https://${token}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-purple-600 dark:text-purple-400 font-semibold underline break-all"
+          >
+            {token}
+          </a>
+        );
+      } else if (/^\+?\d[\d\s.-]{7,}$/.test(token)) {
+        parts.push(
+          <span key={`n${k++}`} className="font-bold text-purple-700 dark:text-purple-300">
+            {token}
+          </span>
+        );
+      } else {
+        parts.push(
+          <span key={`q${k++}`} className="font-semibold text-purple-700 dark:text-purple-300">
+            {token}
+          </span>
+        );
+      }
+      last = m.index + token.length;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+    if (parts.length === 0) parts.push(text);
+    return parts;
+  };
+
+  // Rendu d'une ligne d'instructions (lignes importantes surlignées)
+  const renderInstructionLine = (line: string, i: number) => {
+    const clean = line.trim();
+    if (!clean) return null;
+    const lower = clean.toLowerCase();
+    const isImportant = IMPORTANT_WORDS.some((w) => lower.includes(w));
+
+    if (isImportant) {
+      return (
+        <div
+          key={i}
+          className="bg-amber-50 dark:bg-amber-500/10 border-l-4 border-amber-400 dark:border-amber-500 rounded-r-lg px-3 py-2"
+        >
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200 leading-relaxed">
+            {renderRichText(clean)}
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <p key={i} className="text-sm text-[#8A8A8A] leading-relaxed">
+        {renderRichText(clean)}
+      </p>
+    );
+  };
+
+  // Accomplir une tâche depuis le panneau puis fermer le panneau
+  const completeFromSheet = async (task: any) => {
+    setBottomSheetTask(null);
+    await handleComplete(task.id, task.amount, task.title);
   };
 
   if (isLoading) {
@@ -359,99 +470,24 @@ export default function TasksPage() {
     );
   }
 
-  if (!hasPack) {
-    return (
-      <div className="max-w-lg mx-auto px-4 pt-6 space-y-6">
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-2xl font-bold">Tâches</h1>
-          <p className="text-[#8A8A8A] text-sm mt-1">Choisissez un pack pour commencer</p>
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-amber-50 dark:bg-amber-500/10 rounded-2xl p-4 text-center border border-amber-200 dark:border-amber-500/20">
-          <Lock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
-          <h2 className="font-semibold text-sm mb-1">Aucun pack actif</h2>
-          <p className="text-xs text-[#8A8A8A]">Sélectionnez un pack ci-dessous pour accéder aux tâches</p>
-        </motion.div>
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Packs disponibles</h2>
-          {availablePlans.map((plan, index) => (
-            <motion.div key={plan.name} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
-              <Card className="overflow-hidden">
-                <div className={`h-2 bg-gradient-to-r ${plan.color}`} />
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div><h3 className="font-semibold text-lg">{plan.name}</h3><p className="text-2xl font-bold mt-1">{formatCurrency(plan.price)}</p></div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${plan.badgeColor}`}>{plan.badge}</span>
-                  </div>
-                  <div className="space-y-2 mb-4">
-                    <div className="flex justify-between text-sm"><span className="text-[#8A8A8A]">Tâches</span><span className="font-medium">{plan.tasks}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-[#8A8A8A]">Rentabilité</span><span className="font-medium text-green-500">{plan.profitability}</span></div>
-                  </div>
-                  <Button className="w-full" variant={plan.name === "Gold" ? "purple" : "outline"} onClick={() => router.push(`/invest?plan=${plan.slug}`)}>
-                    <ArrowRight className="w-4 h-4 mr-2" /> Choisir ce pack
-                  </Button>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-lg mx-auto px-4 pt-6 space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold">Tâches</h1>
         <p className="text-[#8A8A8A] text-sm mt-1">
-          {completedToday}/{isUnlimited ? "∞" : dailyLimit} tâche{isUnlimited ? "s" : dailyLimit > 1 ? "s" : ""} aujourd'hui
-          {!isUnlimited && dailyLimit > 0 && ` • ${totalPlanTasks} tâche${totalPlanTasks > 1 ? "s" : ""} disponible${totalPlanTasks > 1 ? "s" : ""}`}
+          {completedToday}/{dailyLimit} tâche aujourd'hui
+          {totalPlanTasks > 0 ? ` • ${totalPlanTasks} tâche${totalPlanTasks > 1 ? "s" : ""} disponible${totalPlanTasks > 1 ? "s" : ""} aujourd'hui` : ""}
         </p>
       </motion.div>
 
-      {investment && (
-        <div className="bg-purple-50 dark:bg-purple-500/10 rounded-xl p-3 flex items-center gap-3">
-          <Info className="w-5 h-5 text-purple-500 flex-shrink-0" />
-          <div className="text-sm text-purple-700 dark:text-purple-300">
-            Pack <strong>{investment.plan?.name || effectivePlanSlug}</strong> • 
-            {isUnlimited ? "Tâches illimitées" : `${dailyLimit} tâche${dailyLimit > 1 ? "s" : ""}/jour`} • 
-            {completedToday} effectuée{completedToday > 1 ? "s" : ""} aujourd'hui
-          </div>
+      {/* Bandeau gratuit : 1 tâche par jour pour TOUS les utilisateurs */}
+      <div className="bg-purple-50 dark:bg-purple-500/10 rounded-xl p-3 flex items-center gap-3">
+        <Info className="w-5 h-5 text-purple-500 flex-shrink-0" />
+        <div className="text-sm text-purple-700 dark:text-purple-300">
+          Plateforme <strong>100% gratuite</strong> — accomplissez <strong>1 tâche par jour</strong>
+          {completedToday > 0 ? " (tâche du jour déjà accomplie ✅)" : ""}
         </div>
-      )}
-
-      {/* Upgrade Banner - visible for non-Gold users */}
-      {effectivePlanSlug && effectivePlanSlug !== "gold" && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-purple-600 to-purple-800 rounded-2xl p-4 text-white"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Crown className="w-5 h-5 text-yellow-400" />
-              <span className="font-semibold">Améliorez votre plan</span>
-            </div>
-            <span className="text-xs text-purple-200">Débloquez plus</span>
-          </div>
-          <div className="flex gap-2">
-            {effectivePlanSlug === "bronze" && (
-              <>
-                <Button size="sm" className="flex-1 bg-white/20 hover:bg-white/30 text-white border border-white/20" onClick={() => router.push("/invest?plan=silver")}>
-                  <Star className="w-3 h-3 mr-1" /> Silver
-                </Button>
-                <Button size="sm" className="flex-1 bg-yellow-400 text-purple-900 hover:bg-yellow-300" onClick={() => router.push("/invest?plan=gold")}>
-                  <Crown className="w-3 h-3 mr-1" /> Gold
-                </Button>
-              </>
-            )}
-            {effectivePlanSlug === "silver" && (
-              <Button size="sm" className="flex-1 bg-yellow-400 text-purple-900 hover:bg-yellow-300" onClick={() => router.push("/invest?plan=gold")}>
-                <Crown className="w-3 h-3 mr-1" /> Passer à Gold
-              </Button>
-            )}
-          </div>
-        </motion.div>
-      )}
+      </div>
 
       {showSuccess && (
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="bg-green-50 dark:bg-green-500/10 rounded-xl p-3 flex items-center gap-3 border border-green-200 dark:border-green-500/20">
@@ -470,6 +506,13 @@ export default function TasksPage() {
         </motion.div>
       )}
 
+      {submitError && (
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="bg-red-50 dark:bg-red-500/10 rounded-xl p-3 flex items-center gap-3 border border-red-200 dark:border-red-500/20">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <div className="text-sm text-red-700 dark:text-red-300 flex-1">{submitError}</div>
+        </motion.div>
+      )}
+
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8A8A8A]" />
         <Input placeholder="Rechercher une tâche..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
@@ -478,7 +521,17 @@ export default function TasksPage() {
       <div className="space-y-3">
         {filteredTasks.length === 0 ? (
           <div className="text-center py-12">
-            {allTasksCompleted ? (
+            {completedToday >= dailyLimit ? (
+              <>
+                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
+                <p className="text-[#8A8A8A] text-sm">
+                  Tâche du jour accomplie ! Revenez demain pour une nouvelle tâche gratuite.
+                </p>
+                <p className="text-xs text-[#8A8A8A] mt-2">
+                  Vous avez accompli {completedToday}/{dailyLimit} tâche aujourd'hui
+                </p>
+              </>
+            ) : (
               <>
                 <Clock className="w-12 h-12 text-amber-500 mx-auto mb-3" />
                 <p className="font-semibold text-[#111111] dark:text-white">
@@ -487,21 +540,6 @@ export default function TasksPage() {
                 <p className="text-sm text-[#8A8A8A] mt-1">
                   Veuillez patienter ou repassez dans quelques heures le temps que les tâches soient ajoutées.
                 </p>
-              </>
-            ) : completedToday >= dailyLimit && !isUnlimited ? (
-              <>
-                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                <p className="text-[#8A8A8A] text-sm">
-                  Limite quotidienne atteinte ! Revenez demain pour de nouvelles tâches.
-                </p>
-                <p className="text-xs text-[#8A8A8A] mt-2">
-                  Vous avez accompli {completedToday}/{dailyLimit} tâche{completedToday > 1 ? "s" : ""} aujourd'hui
-                </p>
-              </>
-            ) : (
-              <>
-                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                <p className="text-[#8A8A8A] text-sm">Aucune tâche trouvée</p>
               </>
             )}
           </div>
@@ -520,7 +558,7 @@ export default function TasksPage() {
                             <p className="text-xs text-[#8A8A8A] mt-0.5 truncate-2 text-safe">{task.description}</p>
                           )}
                         </div>
-                        <span className="text-sm font-bold text-green-500 whitespace-nowrap flex-shrink-0">+{formatCurrency(task.amount)}</span>
+                        <span className="text-sm font-bold text-green-500 whitespace-nowrap flex-shrink-0">{formatTaskReward(task)}</span>
                       </div>
                       <div className="flex items-center gap-3 mt-3">
                         {task.estimated_time && <span className="flex items-center gap-1 text-xs text-[#8A8A8A]"><Clock className="w-3 h-3" /> {task.estimated_time} min</span>}
@@ -528,6 +566,16 @@ export default function TasksPage() {
                           {task.validation_type === "auto" ? "Auto" : "Manuel"}
                         </span>
                       </div>
+
+                      {/* Bouton Instructions → bottom sheet (consignes + action) */}
+                      <Button
+                        size="sm"
+                        className="mt-3 w-full text-purple-600 dark:text-purple-300 border-purple-200 dark:border-purple-500/30 hover:bg-purple-50 dark:hover:bg-purple-500/10"
+                        variant="outline"
+                        onClick={() => setBottomSheetTask(task)}
+                      >
+                        <ListChecks className="w-3 h-3 mr-1" /> Instructions
+                      </Button>
                       {parseMediaInfo(task) ? (() => {
                         const media = parseMediaInfo(task);
                         // Si la tâche a AUSSI un partage [SHARE], on affiche SEULEMENT "Partager"
@@ -546,7 +594,7 @@ export default function TasksPage() {
                                 />
                               )}
                               <Button size="sm" className="w-full bg-purple-500 hover:bg-purple-600" onClick={() => openShareModal(task)}>
-                                <Share2 className="w-3 h-3 mr-1" /> Partager et gagner {formatCurrency(task.amount)}
+                                <Share2 className="w-3 h-3 mr-1" /> Partager et gagner {formatTaskReward(task)}
                               </Button>
                             </div>
                           );
@@ -678,7 +726,7 @@ export default function TasksPage() {
                   <p className="text-xs text-[#8A8A8A]">Partagez le lien ci-dessous</p>
                 </div>
               </div>
-              <p className="text-sm font-bold text-green-500 mt-3">+{formatCurrency(shareModal.amount)}</p>
+              <p className="text-sm font-bold text-green-500 mt-3">{formatTaskReward({ amount: shareModal.amount, amount_label: shareModal.amountLabel })}</p>
             </div>
 
             {/* ===== ÉTAPE 1 : PARTAGER ===== */}
@@ -785,14 +833,28 @@ export default function TasksPage() {
                   />
                 )}
 
-                {shareModal.mediaType === "image" ? (
+                {!shareModal.mediaData ? (
+                  <>
+                    {/* Aucune image/vidéo : rien à regarder, on valide directement */}
+                    <Button
+                      className="w-full bg-green-500 hover:bg-green-600"
+                      size="lg"
+                      onClick={() => setShareModal({ ...shareModal, step: "complete" })}
+                    >
+                      <Check className="w-4 h-4 mr-2" /> Valider ma mission — {formatTaskReward({ amount: shareModal.amount, amount_label: shareModal.amountLabel })}
+                    </Button>
+                    <p className="text-xs text-[#8A8A8A] text-center mt-2">
+                      Aucune vidéo à regarder : confirmez pour recevoir votre récompense.
+                    </p>
+                  </>
+                ) : shareModal.mediaType === "image" ? (
                   shareModal.imageViewed ? (
                     <Button
                       className="w-full bg-green-500 hover:bg-green-600"
                       size="lg"
                       onClick={() => setShareModal({ ...shareModal, step: "complete" })}
                     >
-                      <Eye className="w-4 h-4 mr-2" /> J'ai vu l'image — {formatCurrency(shareModal.amount)}
+                      <Eye className="w-4 h-4 mr-2" /> J'ai vu l'image — {formatTaskReward({ amount: shareModal.amount, amount_label: shareModal.amountLabel })}
                     </Button>
                   ) : (
                     <Button className="w-full" size="lg" disabled>
@@ -822,9 +884,9 @@ export default function TasksPage() {
                   <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-2" />
                   <h3 className="font-semibold">Tout est validé !</h3>
                   <p className="text-sm text-[#8A8A8A] mt-1">
-                    Vous avez partagé et regardé le contenu. Vous pouvez maintenant toucher votre commission.
+                    Vous avez terminé la mission de partage. Touchez votre récompense !
                   </p>
-                  <p className="text-2xl font-bold text-green-500 mt-3">+{formatCurrency(shareModal.amount)}</p>
+                  <p className="text-2xl font-bold text-green-500 mt-3">{formatTaskReward({ amount: shareModal.amount, amount_label: shareModal.amountLabel })}</p>
                 </div>
                 <Button
                   className="w-full bg-green-500 hover:bg-green-600"
@@ -966,6 +1028,233 @@ export default function TasksPage() {
                     Votre preuve sera vérifiée par un administrateur avant crédit.
                   </p>
                 </>
+              );
+            })()}
+          </motion.div>
+        </div>
+      )}
+    {/* ===== PANNEAU INSTRUCTIONS (bottom sheet : se déroule du bas vers le haut) ===== */}
+      {bottomSheetTask && (
+        <div className="fixed inset-0 z-[55] flex items-end justify-center overflow-hidden">
+          {/* Fond sombre (clic = fermer) */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setBottomSheetTask(null)}
+          />
+          {/* Panneau qui remonte depuis le bas */}
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 260, damping: 30 }}
+            className="relative w-full max-w-lg bg-white dark:bg-[#161616] rounded-t-3xl p-6 max-h-[88vh] overflow-y-auto"
+          >
+            {/* Poignée */}
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700" />
+            </div>
+
+            {/* En-tête */}
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-start gap-3">
+                <div className="w-14 h-14 rounded-xl bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center text-2xl flex-shrink-0">
+                  {bottomSheetTask.icon || "📋"}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-bold text-lg leading-snug">{bottomSheetTask.title}</h2>
+                  <p className="text-sm font-bold text-green-500 mt-1">{formatTaskReward(bottomSheetTask)}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setBottomSheetTask(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0"
+                aria-label="Fermer les instructions"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Méta */}
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              {bottomSheetTask.estimated_time && (
+                <span className="flex items-center gap-1 text-xs text-[#8A8A8A] bg-gray-100 dark:bg-gray-800 px-2.5 py-1 rounded-full">
+                  <Clock className="w-3 h-3" /> {bottomSheetTask.estimated_time} min
+                </span>
+              )}
+              <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${bottomSheetTask.validation_type === "auto" ? "bg-green-100 text-green-700 dark:bg-green-500/20" : "bg-amber-100 text-amber-700 dark:bg-amber-500/20"}`}>
+                {bottomSheetTask.validation_type === "auto" ? "Validation automatique" : "Validation manuelle"}
+              </span>
+            </div>
+
+            {/* Instructions */}
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <ListChecks className="w-5 h-5 text-purple-500" /> Instructions
+            </h3>
+
+            {/* Média si présent */}
+            {(() => {
+              const media = parseMediaInfo(bottomSheetTask);
+              if (!media) return null;
+              return (
+                <div className="mb-3">
+                  {media.type === "image" ? (
+                    <img src={media.data} alt={bottomSheetTask.title} className="w-full rounded-xl max-h-72 object-contain bg-gray-50 dark:bg-white/5" />
+                  ) : (
+                    <video src={media.data} controls className="w-full rounded-xl max-h-60 bg-black" />
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Lignes d'instructions (importantes surlignées / soulignées / colorées) */}
+            {(() => {
+              const lines = getCleanInstructions(bottomSheetTask)
+                .split("\n")
+                .map((l: string, i: number) => renderInstructionLine(l, i));
+              return lines.length > 0 ? (
+                <div className="space-y-3 mb-6">{lines}</div>
+              ) : (
+                <p className="text-sm text-[#8A8A8A] mb-6">
+                  Aucune instruction détaillée pour cette mission. Suivez le lien puis revenez pour valider.
+                </p>
+              );
+            })()}
+
+            {/* NB — Choses à éviter : encadré d'avertissement BIEN VISIBLE */}
+            {(() => {
+              const nbList = getNbLines(bottomSheetTask);
+              return (
+                <div className="mb-6 rounded-xl border-2 border-red-300 dark:border-red-500/60 bg-red-100 dark:bg-red-500/10 p-4">
+                  <p className="font-bold text-red-700 dark:text-red-400 text-sm flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" /> NB — À éviter
+                  </p>
+                  {nbList.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {nbList.map((nb, i) => (
+                        <p key={i} className="text-sm text-red-700 dark:text-red-300 leading-relaxed">
+                          • {renderRichText(nb.replace(NB_LINE_PATTERN, ""))}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-red-700 dark:text-red-300 leading-relaxed">
+                      • Suivez <strong>strictement</strong> les instructions ci-dessus. Toute <strong>fraude, fausse preuve ou tentative de triche</strong> entraîne le rejet de la mission et peut mener à la <strong>suspension définitive</strong> du compte.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Lien de la mission */}
+            {(() => {
+              const media = parseMediaInfo(bottomSheetTask);
+              const showLink = Boolean(bottomSheetTask.link) && !parseShareInfo(bottomSheetTask) && !media;
+              return showLink ? (
+                <a
+                  href={normalizeUrl(bottomSheetTask.link)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => openTaskLink(bottomSheetTask)}
+                  className="flex items-center justify-center gap-2 w-full p-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-sm font-medium mb-6"
+                >
+                  <ExternalLink className="w-4 h-4" /> Voir la mission
+                </a>
+              ) : null;
+            })()}
+          {/* Action principale selon le type de tâche */}
+            {(() => {
+              // Tâche à partager → on passe par la modal de partage
+              if (parseShareInfo(bottomSheetTask)) {
+                return (
+                  <Button
+                    size="lg"
+                    className="w-full bg-green-500 hover:bg-green-600"
+                    onClick={() => {
+                      openShareModal(bottomSheetTask);
+                      setBottomSheetTask(null);
+                    }}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" /> Partager et gagner {formatTaskReward(bottomSheetTask)}
+                  </Button>
+                );
+              }
+
+              // Tâche manuelle → envoyer les preuves
+              if (bottomSheetTask.validation_type === "manual") {
+                return (
+                  <>
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      onClick={() => {
+                        openTaskModal(bottomSheetTask.id);
+                        setBottomSheetTask(null);
+                      }}
+                    >
+                      <Upload className="w-4 h-4 mr-2" /> Envoyer les preuves
+                    </Button>
+                    <p className="text-xs text-[#8A8A8A] text-center mt-2">
+                      Votre preuve sera vérifiée par un administrateur avant crédit.
+                    </p>
+                  </>
+                );
+              }
+
+              // Tâche auto : lien déjà ouvert → confirmer la mission
+              if (confirmingId === bottomSheetTask.id) {
+                return (
+                  <>
+                    <Button
+                      size="lg"
+                      className="w-full bg-green-500 hover:bg-green-600"
+                      disabled={completingId === bottomSheetTask.id}
+                      onClick={() => completeFromSheet(bottomSheetTask)}
+                    >
+                      {completingId === bottomSheetTask.id ? (
+                        <><Sparkles className="w-4 h-4 mr-2 animate-spin" /> Paiement en cours...</>
+                      ) : (
+                        <><Check className="w-4 h-4 mr-2" /> J'ai terminé la mission</>
+                      )}
+                    </Button>
+                    {bottomSheetTask.link && (
+                      <Button size="sm" variant="outline" className="w-full mt-2" onClick={() => openTaskLink(bottomSheetTask)}>
+                        <ExternalLink className="w-4 h-4 mr-1" /> Rouvrir le lien
+                      </Button>
+                    )}
+                  </>
+                );
+              }
+
+              // Tâche auto avec lien → ouvrir la mission
+              if (bottomSheetTask.link && !parseMediaInfo(bottomSheetTask)) {
+                return (
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={() => openTaskLink(bottomSheetTask)}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" /> Ouvrir la mission
+                  </Button>
+                );
+              }
+
+              // Tâche auto simple (ou média sans partage) → accomplir
+              return (
+                <Button
+                  size="lg"
+                  className="w-full"
+                  disabled={completingId === bottomSheetTask.id}
+                  onClick={() => completeFromSheet(bottomSheetTask)}
+                >
+                  {completingId === bottomSheetTask.id ? (
+                    <><Sparkles className="w-4 h-4 mr-2 animate-spin" /> Paiement en cours...</>
+                  ) : (
+                    <><Sparkles className="w-4 h-4 mr-2" /> Accomplir la tâche — {formatTaskReward(bottomSheetTask)}</>
+                  )}
+                </Button>
               );
             })()}
           </motion.div>

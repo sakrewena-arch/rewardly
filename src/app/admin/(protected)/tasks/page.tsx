@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Clock, Link2, Type, Hash, Image, Video, MessageCircle, Send, Target, Share2, ChevronDown, Filter, Loader2, AlertTriangle, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Clock, Link2, Type, Hash, Image, Video, MessageCircle, Send, Target, Share2, ChevronDown, Filter, Loader2, AlertCircle, AlertTriangle, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { getTasks, createTaskAction, deleteTaskAction, getPlans, getCategories, getSubmissions, approveSubmissionAction, rejectSubmissionAction } from "@/actions/admin-actions";
+import { getTasks, createTaskAction, deleteTaskAction, getCategories, getSubmissions, approveSubmissionAction, rejectSubmissionAction } from "@/actions/admin-actions";
 
 interface TaskData {
   id: string;
@@ -24,7 +24,6 @@ interface TaskData {
   validation_type: "auto" | "manual";
   is_active: boolean;
   created_at: string;
-  plans: { name: string; slug: string } | null;
   task_categories: { name: string; slug: string } | null;
 }
 
@@ -68,7 +67,6 @@ const taskIcons = ["📋", "💬", "🌐", "📸", "📱", "🎥", "📊", "⭐"
 export default function AdminTasksPage() {
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskData[]>([]);
-  const [plans, setPlans] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -77,11 +75,12 @@ export default function AdminTasksPage() {
     title: "",
     description: "",
     amount: "",
-    plan_id: "",
+    amount_label: "",
     category_id: "",
     icon: "📋",
     estimated_time: "",
     instructions: "",
+    nb_warning: "",
     link: "",
     max_completions: "",
     duration_minutes: "",
@@ -147,9 +146,8 @@ export default function AdminTasksPage() {
 
   const loadData = async () => {
     try {
-      const [tasksData, plansData, catsData] = await Promise.all([
+      const [tasksData, catsData] = await Promise.all([
         getTasks(),
-        getPlans(true),
         getCategories(),
       ]);
       const serverTasks = tasksData || [];
@@ -161,7 +159,6 @@ export default function AdminTasksPage() {
         });
         return Array.from(map.values());
       });
-      setPlans(plansData || []);
       setCategories(catsData || []);
     } catch (e) {
       console.error("Failed to load admin tasks data", e);
@@ -236,11 +233,10 @@ export default function AdminTasksPage() {
   };
 
   const handleCreateTask = async () => {
-    if (!form.title || !form.amount || !form.plan_id) return;
+    if (!form.title || !form.amount) return;
     setSubmitting(true);
     setFeedback(null);
     try {
-      const effectivePlanId = form.plan_id === "all" ? null : form.plan_id;
       // Encode share info in instructions for share-type tasks
       let finalInstructions = form.instructions || "";
       if (form.task_type === "share") {
@@ -250,11 +246,21 @@ export default function AdminTasksPage() {
       if (form.media_data && mediaType) {
         finalInstructions = `[MEDIA] type=${mediaType} data=${form.media_data}\n${finalInstructions}`;
       }
+      // NB : choses à éviter → ajoutées comme ligne "NB :" dans les instructions
+      // (affichées dans un encadré bien visible dans le panneau Instructions).
+      if (form.nb_warning?.trim()) {
+        const nbValue = form.nb_warning.trim();
+        // Évite le double préfixe si l'admin a déjà écrit "NB : ..."
+        const nbLine = /^NB\s*[:.\-–—]/i.test(nbValue) ? nbValue : `NB : ${nbValue}`;
+        finalInstructions = `${finalInstructions}\n${nbLine}`.trim();
+      }
       const result = await createTaskAction({
         title: form.title,
         description: form.description || undefined,
         amount: Number(form.amount),
-        plan_id: effectivePlanId || "",
+        amount_label: form.amount_label?.trim() || null,
+        // Plateforme gratuite : aucune tâche n'est liée à un pack
+        plan_id: null,
         category_id: form.category_id || undefined,
         icon: form.icon,
         estimated_time: form.estimated_time ? Number(form.estimated_time) : undefined,
@@ -278,8 +284,8 @@ export default function AdminTasksPage() {
         setFeedback(createdTaskId ? `Tâche créée avec succès : ${form.title} (id: ${createdTaskId})` : `Tâche créée avec succès : ${form.title}`);
         setShowForm(false);
         setForm({
-          title: "", description: "", amount: "", plan_id: "", category_id: "",
-          icon: "📋", estimated_time: "", instructions: "", link: "",
+          title: "", description: "", amount: "", amount_label: "", category_id: "",
+          icon: "📋", estimated_time: "", instructions: "", nb_warning: "", link: "",
           max_completions: "", duration_minutes: "", validation_type: "auto",
           task_type: "standard", share_app: "", share_target: "", media_data: "",
         });
@@ -448,14 +454,16 @@ export default function AdminTasksPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Pack concerné *</label>
-                    <select className="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 text-sm" value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })}>
-                      <option value="">Sélectionner un pack</option>
-                      <option value="all">Tous les plans</option>
-                      {plans.map((plan) => (
-                        <option key={plan.id} value={plan.id}>{plan.name}</option>
-                      ))}
-                    </select>
+                    <label className="text-sm font-medium">Libellé affiché (facultatif — texte)</label>
+                    <Input type="text" placeholder="Ex : 20% de la valeur, 1 000 FCFA offerts, 2× au tirage..." value={form.amount_label} onChange={(e) => setForm({ ...form, amount_label: e.target.value })} />
+                    <p className="text-xs text-[#8A8A8A]">Si rempli, les utilisateurs verront ce texte à la place du montant FCFA (la récompense FCFA reste utilisée pour le crédit).</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Pack concerné</label>
+                    <p className="text-xs text-[#8A8A8A] bg-gray-50 dark:bg-white/5 rounded-xl p-3">
+                      Plateforme 100% gratuite : cette tâche sera accessible à <strong>tous les utilisateurs</strong> (1 tâche par jour).
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -608,6 +616,14 @@ export default function AdminTasksPage() {
                     <textarea className="w-full min-h-[80px] rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm" placeholder="Expliquez précisément ce que l'utilisateur doit faire..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
                   </div>
 
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-500" /> NB — Choses à éviter (facultatif)
+                    </label>
+                    <textarea className="w-full min-h-[60px] rounded-xl border-2 border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300" placeholder="Ex : NB : ne pas partager le lien, ne pas utiliser de bots, une seule participation par personne..." value={form.nb_warning} onChange={(e) => setForm({ ...form, nb_warning: e.target.value })} />
+                    <p className="text-xs text-[#8A8A8A]">Sera affiché <strong>en rouge bien visible</strong> dans le panneau d'instructions de l'utilisateur (préfixez déjà par « NB : » ou écrivez directement, le « NB : » est ajouté automatiquement).</p>
+                  </div>
+
                   {form.task_type !== "share" && (
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Nombre max de participations</label>
@@ -700,7 +716,7 @@ export default function AdminTasksPage() {
 
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>
-                  <Button onClick={handleCreateTask} disabled={submitting || !form.title || !form.amount || !form.plan_id}>
+                  <Button onClick={handleCreateTask} disabled={submitting || !form.title || !form.amount}>
                     {submitting ? "Création..." : "Créer la tâche"}
                   </Button>
                 </div>
@@ -856,7 +872,6 @@ export default function AdminTasksPage() {
                     <div className="flex items-center gap-3 text-sm mb-3">
                       <span className="font-bold text-green-500">+{formatCurrency(task.amount)}</span>
                       {task.estimated_time && <span className="flex items-center gap-1 text-[#8A8A8A]"><Clock className="w-3 h-3" /> {task.estimated_time} min</span>}
-                      {task.plans && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">{task.plans.name}</span>}
                     </div>
                     {(() => {
                       const media = parseMediaFromInstructions(task.instructions);
@@ -927,9 +942,6 @@ export default function AdminTasksPage() {
                               )}
                               {task.task_categories && (
                                 <p className="text-sm text-[#8A8A8A]">Catégorie : {task.task_categories.name}</p>
-                              )}
-                              {task.plans && (
-                                <p className="text-sm text-[#8A8A8A]">Pack : {task.plans.name}</p>
                               )}
                             </div>
                           )}

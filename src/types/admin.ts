@@ -12,6 +12,7 @@ export interface CreateTaskInput {
   title: string;
   description?: string;
   amount: number;
+  amount_label?: string | null;
   plan_id: string | null;
   category_id?: string;
   icon?: string;

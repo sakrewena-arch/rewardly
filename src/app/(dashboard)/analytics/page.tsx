@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { TrendingUp, DollarSign, CheckSquare, Target, Wallet, Gift, BarChart3 } from "lucide-react";
+import { TrendingUp, DollarSign, CheckSquare, Target, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { useWallet } from "@/hooks/useWallet";
@@ -37,7 +37,6 @@ export default function AnalyticsPage() {
   const isLoading = walletLoading || tasksLoading;
 
   const totalEarnings = wallet?.total_earnings || 0;
-  const totalInvested = wallet?.invested_capital || 0;
   const currentBalance = wallet?.balance || 0;
 
   const completedTasks = submissions.filter((s) => s.status === "approved").length;
@@ -222,10 +221,6 @@ export default function AnalyticsPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-[#8A8A8A]">Balance disponible</span>
                 <span className="font-medium">{formatCurrency(currentBalance)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#8A8A8A]">Capital investi</span>
-                <span className="font-medium">{formatCurrency(totalInvested)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-[#8A8A8A]">Gains cumulés</span>

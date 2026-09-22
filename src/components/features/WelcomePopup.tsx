@@ -170,15 +170,15 @@ export default function WelcomePopup() {
                 <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 max-h-56 overflow-y-auto text-sm space-y-3">
                   <p className="text-[#8A8A8A] leading-relaxed">
                     <strong className="text-[#111111] dark:text-white">1. Comment Rewardly fonctionne</strong><br />
-                    Rewardly est une plateforme de micro-tâches rémunérées. Des <strong>entreprises</strong> publient des missions (visites de sites, partages, questionnaires...), et vous êtes <strong>récompensé</strong> pour chaque tâche accomplie.
+                    Rewardly est une plateforme de micro-tâches rémunérées <strong>100% gratuite</strong> : aucun pack, aucun investissement ni dépôt n'est nécessaire. Des <strong>entreprises</strong> publient des missions (visites de sites, partages, questionnaires...), et vous êtes <strong>récompensé</strong> pour chaque tâche accomplie.
                   </p>
                   <p className="text-[#8A8A8A] leading-relaxed">
                     <strong className="text-[#111111] dark:text-white">2. Vos gains</strong><br />
-                    Chaque tâche validée crédite votre <strong>solde Rewardly</strong>. Vous pouvez ensuite <strong>retirer vos gains</strong> via Mobile Money (Orange, MTN, Wave...) selon les conditions en vigueur.
+                    Chaque jour, vous pouvez accomplir <strong>1 tâche</strong> pour gagner de l'argent. Chaque tâche validée crédite votre <strong>solde Rewardly</strong>. Vous pouvez ensuite <strong>retirer vos gains</strong> via Mobile Money (Orange, MTN, Wave...) selon les conditions en vigueur.
                   </p>
                   <p className="text-[#8A8A8A] leading-relaxed">
                     <strong className="text-[#111111] dark:text-white">3. Utilisation responsable</strong><br />
-                    Une seule tâche par compte. Toute tentative de fraude (multi-comptes, bots, fausses preuves) entraîne la <strong>suspension définitive</strong> du compte et la perte des gains.
+                    Une seule tâche par jour et par compte. Toute tentative de fraude (multi-comptes, bots, fausses preuves) entraîne la <strong>suspension définitive</strong> du compte et la perte des gains.
                   </p>
                   <p className="text-[#8A8A8A] leading-relaxed">
                     <strong className="text-[#111111] dark:text-white">4. Retraits</strong><br />

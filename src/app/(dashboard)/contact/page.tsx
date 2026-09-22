@@ -17,27 +17,27 @@ interface Message {
 const knowledgeBase: { keywords: string[]; answer: string }[] = [
   {
     keywords: ["bonjour", "salut", "hello", "bonsoir"],
-    answer: "Bonjour ! 👋 Je suis l'assistant Rewardly. Comment puis-je vous aider ? Vous pouvez me poser des questions sur les tâches, les dépôts, les retraits, les packs, le parrainage, etc.",
+    answer: "Bonjour ! 👋 Je suis l'assistant Rewardly. Comment puis-je vous aider ? Vous pouvez me poser des questions sur les tâches, les retraits, le parrainage, etc.",
   },
   {
     keywords: ["tache", "tâche", "mission", "gagner", "argent"],
-    answer: "💰 Pour gagner de l'argent sur Rewardly :\n1. Activez un pack (Bronze, Silver ou Gold)\n2. Allez dans l'onglet 'Tâches'\n3. Accomplissez les missions (visites, sondages, tests)\n4. Chaque tâche vous crédite le montant indiqué\n\nLes gains proviennent des entreprises qui paient pour leur publicité !",
+    answer: "💰 Pour gagner de l'argent sur Rewardly, c'est 100% GRATUIT :\n1. Allez dans l'onglet 'Tâches'\n2. Accomplissez votre tâche du jour (visites, sondages, tests)\n3. Chaque tâche vous crédite le montant indiqué\n\n✅ 1 tâche par jour pour tous, sans aucun pack ni investissement. Les gains proviennent des entreprises qui paient pour leur publicité !",
   },
   {
-    keywords: ["depot", "dépôt", "recharger", "payer"],
-    answer: "💳 Pour faire un dépôt :\n1. Allez dans l'onglet 'Dépôt'\n2. Choisissez votre opérateur (MTN, Orange, Wave, Moov...)\n3. Entrez le montant (minimum 5 000 FCFA)\n4. Confirmez le paiement sur votre téléphone\n5. Votre wallet est crédité automatiquement !",
+    keywords: ["depot", "dépôt", "recharger", "payer", "deposer", "déposer"],
+    answer: "✅ Rewardly est une plateforme 100% GRATUITE : aucun dépôt n'est nécessaire (ni obligatoire).\n\nCréez simplement un compte, accomplissez votre tâche du jour et retirez vos gains. Aucun achat de pack, aucun versement initial.",
   },
   {
     keywords: ["retrait", "retirer", "retirable", "retirer argent"],
-    answer: "🏧 Pour retirer vos gains :\n1. Allez dans l'onglet 'Retrait'\n2. Choisissez votre opérateur\n3. Entrez le montant à retirer\n4. La demande est envoyée à l'admin\n5. L'argent est envoyé sur votre numéro via FeeXPay\n\n⚠️ Seuls les gains de tâches sont retirables (pas le capital investi).",
+    answer: "🏧 Pour retirer vos gains :\n1. Allez dans l'onglet 'Retrait'\n2. Choisissez votre opérateur\n3. Entrez le montant à retirer\n4. La demande est envoyée à l'admin\n5. L'argent est envoyé sur votre numéro via FeeXPay\n\n⚠️ Seuls les gains de tâches et de parrainage sont retirables.",
   },
   {
-    keywords: ["pack", "plan", "bronze", "silver", "gold", "activer"],
-    answer: "📦 Les packs Rewardly :\n• Bronze : 5 000 FCFA → 1 tâche/jour\n• Silver : 10 000 FCFA → 3 tâches/jour\n• Gold : 20 000 FCFA → Tâches illimitées\n\nLe pack est un engagement de motivation. Plus le pack est élevé, plus les tâches sont rémunératrices !",
+    keywords: ["pack", "plan", "bronze", "silver", "gold", "activer", "investi", "investissement"],
+    answer: "🎁 Bonus : Rewardly est 100% GRATUIT.\n\nIl n'y a plus de packs ni d'investissements : tous les utilisateurs accèdent à toutes les tâches et gagnent de l'argent sans rien payer. Chaque jour, 1 tâche à accomplir, c'est tout !",
   },
   {
     keywords: ["parrain", "parrainage", "filleul", "inviter", "referral"],
-    answer: "🤝 Le parrainage :\n1. Partagez votre code de parrainage (dans l'onglet 'Parrainage')\n2. Quand quelqu'un s'inscrit avec votre code, vous gagnez une commission\n3. Vous pouvez aussi partager votre QR code\n4. Plus vous parrainez, plus vous gagnez !",
+    answer: "🤝 Le parrainage :\n1. Partagez votre code ou votre lien de parrainage (dans l'onglet 'Parrainage')\n2. Quand quelqu'un s'inscrit avec votre lien, il est automatiquement lié à vous\n3. Vous gagnez 10% des gains de la personne parrainée (ex : 500 FCFA si elle gagne 5 000 FCFA)\n4. Plus vous parrainez, plus vous gagnez !",
   },
   {
     keywords: ["solde", "balance", "wallet", "compte"],
@@ -82,7 +82,7 @@ export default function ContactPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "bot",
-      content: "Bonjour ! 👋 Je suis l'assistant virtuel de Rewardly. Posez-moi une question sur les tâches, dépôts, retraits, packs, parrainage... Je vous répondrai instantanément !",
+      content: "Bonjour ! 👋 Je suis l'assistant virtuel de Rewardly. Posez-moi une question sur les tâches, retraits, parrainage... Je vous répondrai instantanément !",
     },
   ]);
   const [input, setInput] = useState("");

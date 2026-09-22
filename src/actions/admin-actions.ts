@@ -17,7 +17,6 @@ export * from "./admin-actions-helpers";
 export * from "./admin-actions-analytics";
 export * from "./admin-actions-users";
 export * from "./admin-actions-finance";
-export * from "./admin-actions-plans";
 export * from "./admin-actions-tasks";
 export * from "./admin-actions-submissions";
 export * from "./admin-actions-categories";

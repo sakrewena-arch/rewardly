@@ -8,9 +8,9 @@
 
 ### 👤 Utilisateurs
 - Dashboard avec carte bancaire virtuelle
-- Système de packs (Bronze, Silver, Gold)
+- Plateforme 100% gratuite — sans pack ni investissement (**1 tâche par jour**)
 - Tâches rémunérées avec validation auto/manuelle
-- Dépôts et retraits
+- Retraits des gains (Mobile Money via FeexPay)
 - Parrainage avec code et lien de parrainage
 - Notifications en temps réel (compteur non-lues)
 - Notifications de rappel automatiques (tâches du jour, upgrade de plan, dépôts en attente)
@@ -26,9 +26,8 @@
 ### 👑 Administration
 - Tableau de bord administrateur complet
 - Gestion des utilisateurs (CRUD, bannissement)
-- Gestion des packs
 - Gestion des tâches (avec champs personnalisés, médias, partage)
-- Validation des dépôts et retraits
+- Validation des retraits de gains
 - Paramètres système persistés en base
 - Notifications push (Edge Functions)
 - Logs d'activité

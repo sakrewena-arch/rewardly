@@ -1,39 +1,23 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowUpRight, ArrowDownLeft, Wallet, TrendingUp, Gift, Eye, EyeOff, ExternalLink, Clock, Crown, Star, Bell, Megaphone, X, ChevronDown } from "lucide-react";
+import { ArrowUpRight, Wallet, TrendingUp, Gift, Eye, EyeOff, ExternalLink, Clock, Bell, Megaphone, X, ChevronDown, Lock, Rocket, CheckCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/hooks/useWallet";
 import { useTasks } from "@/hooks/useTasks";
 import { generateDailyRemindersAction } from "@/actions/reminder-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatTaskReward } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
-const plans = [
-  {
-    name: "Bronze", price: 5000, tasks: "1 tâche/jour", profitability: "10% - 20%", badge: "Bronze",
-    color: "from-amber-700 to-amber-600", badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-500/20",
-  },
-  {
-    name: "Silver", price: 10000, tasks: "3 tâches/jour", profitability: "20% - 30%", badge: "Silver",
-    color: "from-gray-400 to-gray-300", badgeColor: "bg-gray-100 text-gray-600 dark:bg-gray-500/20",
-  },
-  {
-    name: "Gold", price: 20000, tasks: "Toutes les tâches", profitability: "40% - 50%", badge: "Premium",
-    color: "from-yellow-500 to-yellow-400", badgeColor: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20",
-  },
-];
-
 export default function DashboardPage() {
-  const { profile, user } = useAuth();
+  const { profile, user, isLoading: isAuthLoading } = useAuth();
   const { wallet, transactions, isLoading, withdrawableAmount, refreshWallet } = useWallet();
-  const { tasks, hasPack, userPlanSlug } = useTasks();
-  const effectivePlanSlug = userPlanSlug;
+  const { tasks, completedToday, isLoading: tasksLoading } = useTasks();
   const router = useRouter();
   const [showBalance, setShowBalance] = useState(true);
   const [announcements, setAnnouncements] = useState<any[]>([]);
@@ -41,8 +25,6 @@ export default function DashboardPage() {
   const [txFilter, setTxFilter] = useState<"today" | "week" | "month" | "year" | "all">("all");
   const [showAllTx, setShowAllTx] = useState(false);
   const [txExpanded, setTxExpanded] = useState(true);
-  const isGoldPlan = effectivePlanSlug === "gold";
-  const showUpgradeCard = !isGoldPlan;
 
   // Charger les notifications (annonces) pour l'utilisateur connecté
   useEffect(() => {
@@ -122,6 +104,147 @@ export default function DashboardPage() {
     localStorage.setItem("rewardly_dismissed_announcements", JSON.stringify(next));
   };
 
+  // ============================================================
+  // Landing pour les visiteurs (non connectés) :
+  // le contenu marketing est complet, le CTA Connexion/Inscription
+  // est affiché EN BAS, là où la liste des tâches apparaît.
+  // ============================================================
+  const guestLanding = (
+    <div className="max-w-lg mx-auto px-4 pt-6 space-y-6 overflow-guard">
+      {/* HERO */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="relative overflow-hidden rounded-3xl shadow-2xl shadow-purple-900/50 ring-1 ring-white/15">
+          {/* Halo décoratif */}
+          <div className="absolute -top-16 -right-16 w-52 h-52 rounded-full bg-[#F7CB57]/20 blur-3xl pointer-events-none" />
+          <div className="card-gradient p-6 relative">
+            {/* Identité — carte à fond translucide */}
+            <div className="flex items-center gap-2.5 rounded-2xl bg-white/15 backdrop-blur-md ring-1 ring-white/30 px-3 py-2.5 shadow-lg shadow-black/20">
+              <img
+                src="/images/logo.png"
+                alt="Rewardly"
+                className="w-11 h-11 rounded-xl object-contain bg-white p-1.5 shadow-lg shadow-black/30"
+              />
+              <div>
+                <span className="block text-lg font-extrabold tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.45)]">
+                  Rewardly
+                </span>
+                <span className="block text-[10px] font-semibold tracking-[0.14em] text-white/75 uppercase">
+                  Des missions · Du cash
+                </span>
+              </div>
+            </div>
+
+            {/* Titre — grande carte dégradé */}
+            <div className="mt-3.5 relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-fuchsia-500/30 to-[#F7CB57]/15 ring-1 ring-white/25 shadow-xl shadow-purple-900/40 p-4">
+              <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-white/10 blur-xl pointer-events-none" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#F7CB57]">
+                Prêt à gagner ?
+              </p>
+              <h1 className="mt-1 text-[1.7rem] font-black leading-tight text-white drop-shadow-[0_3px_10px_rgba(0,0,0,0.35)]">
+                Votre 1ère tâche vous attend
+              </h1>
+            </div>
+
+            {/* Description — carte glass */}
+            <div className="mt-3 rounded-2xl bg-white/10 backdrop-blur-md ring-1 ring-white/20 px-3 py-2.5 shadow-lg">
+              <p className="text-sm leading-relaxed text-white/90">
+                Créez un compte gratuit, accomplissez <strong className="font-bold text-[#F7CB57]">1 tâche par jour</strong> et retirez vos gains en Mobile Money.
+              </p>
+            </div>
+
+            {/* Wallet (juste le visuel, sans texte) */}
+            <div className="mt-5 relative overflow-hidden rounded-3xl shadow-2xl shadow-purple-900/50 ring-1 ring-white/20">
+              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#F7CB57] via-yellow-300 to-[#F7CB57] z-10" />
+              <div className="card-gradient px-6 pt-8 pb-5 relative flex flex-col items-center justify-center">
+                <DotLottieReact
+                  src="/wallet-loader.json"
+                  loop
+                  autoplay
+                  style={{ width: "100%", maxWidth: "240px", height: "130px" }}
+                />
+                {/* Bouton Commencer */}
+                <button
+                  onClick={() => router.push("/register")}
+                  className="mt-3 w-full bg-white rounded-xl py-3 px-4 flex items-center justify-center gap-2 shadow-lg shadow-black/30"
+                >
+                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                    <Rocket className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <span className="font-semibold text-sm text-[#111111]">Commencer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* COMMENT ÇA MARCHE */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <h2 className="text-lg font-semibold mb-3">Comment ça marche ?</h2>
+        <div className="space-y-3">
+          {[
+            { icon: Rocket, title: "1. Créez votre compte gratuit", desc: "Inscription en 30 secondes, sans aucun paiement." },
+            { icon: CheckCircle, title: "2. Accomplissez la tâche du jour", desc: "Visites, sondages, partages, abonnements : 1 mission / jour." },
+            { icon: ArrowUpRight, title: "3. Retirez vos gains", desc: "Crédit instantané, retrait en Mobile Money (Orange, MTN, Wave…)." },
+          ].map((s, i) => (
+            <div key={i} className="flex items-start gap-3 p-4 bg-white dark:bg-[#161616] rounded-2xl border border-gray-100 dark:border-gray-800">
+              <div className="w-11 h-11 rounded-xl bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                <s.icon className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">{s.title}</p>
+                <p className="text-xs text-[#8A8A8A] mt-0.5">{s.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* AVANTAGES */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="font-semibold mb-3">Pourquoi Rewardly ?</h3>
+            <div className="space-y-2">
+              {[
+                "100% gratuit : aucun pack, aucun investissement, aucun dépôt",
+                "1 tâche rémunérée par jour pour tous les utilisateurs",
+                "Gains retirables via Mobile Money",
+                "Parrainage : gagnez 10% des gains de chaque filleul",
+              ].map((line, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-[#8A8A8A]">{line}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* 🔐 AUTHENTIFICATION EN BAS — là où s'affiche la liste des tâches */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+        <div className="rounded-2xl border-2 border-purple-300 dark:border-purple-500/40 bg-gradient-to-r from-purple-600 to-purple-800 p-6 text-white">
+          <div className="flex items-center gap-2 mb-2">
+            <Lock className="w-5 h-5 text-yellow-400" />
+            <h3 className="font-bold text-lg">Vos tâches vous attendent</h3>
+          </div>
+          <p className="text-purple-100 text-sm mb-4">
+            Connectez-vous ou créez votre compte gratuit pour voir la tâche du jour et retirer vos gains.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Button size="lg" className="w-full" onClick={() => router.push("/register")}>
+              <Rocket className="w-4 h-4 mr-2" /> Créer un compte gratuit
+            </Button>
+            <Button size="lg" variant="outline" className="w-full bg-white/10 border border-white/30 text-white" onClick={() => router.push("/login")}>
+              <Lock className="w-4 h-4 mr-2" /> Se connecter
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+
   if (isLoading) {
   return (
     <div className="max-w-lg mx-auto px-4 pt-6 space-y-6 overflow-guard">
@@ -136,6 +259,15 @@ export default function DashboardPage() {
         </div>
       </div>
     );
+  }
+
+  // ============================================================
+  // PAGE D'ACCUEIL POUR LES VISITEURS (non connectés)
+  // Le contenu est affiché en entier ; l'appel à l'authentification
+  // est placé EN BAS, là où la liste des tâches apparaît.
+  // ============================================================
+  if (!user && !isAuthLoading) {
+    return guestLanding;
   }
 
   return (
@@ -169,10 +301,10 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-            {/* Animation Lottie Wallet */}
+            {/* Animation Lottie Wallet (fichier LOCAL → aucune erreur réseau) */}
             <div className="relative w-20 h-20 flex-shrink-0">
               <DotLottieReact
-                src="https://lottie.host/50442351-6dc1-41b7-a313-e51d8f625e3a/gqYGBd7Mvi.json"
+                src="/wallet-loader.json"
                 loop
                 autoplay
                 style={{ width: "100%", height: "100%" }}
@@ -195,8 +327,8 @@ export default function DashboardPage() {
               <p className="text-white font-bold text-sm">{formatCurrency(wallet?.total_earnings || 0)}</p>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-xl p-2.5 text-center">
-              <p className="text-white/60 text-[10px]">Investi</p>
-              <p className="text-white font-bold text-sm">{formatCurrency(wallet?.invested_capital || 0)}</p>
+              <p className="text-white/60 text-[10px]">Tâches</p>
+              <p className="text-white font-bold text-sm">{tasks.length}</p>
             </div>
             <div className="bg-white/10 backdrop-blur rounded-xl p-2.5 text-center">
               <p className="text-white/60 text-[10px]">Retirable</p>
@@ -205,18 +337,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-3">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => router.push("/deposit")}
-              className="bg-white rounded-xl py-3 px-4 flex items-center justify-center gap-2 shadow-lg shadow-black/10"
-            >
-              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                <ArrowDownLeft className="w-4 h-4 text-green-600" />
-              </div>
-              <span className="font-semibold text-sm text-[#111111]">Déposer</span>
-            </motion.button>
+          <div className="grid grid-cols-1 gap-3">
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -293,110 +414,7 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {/* Available Packs - shown when no pack is active */}
-      {!hasPack && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-        >
-          <div className="rounded-2xl border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 p-4 text-center mb-4">
-            <Crown className="w-8 h-8 text-amber-500 mx-auto mb-2" />
-            <h2 className="font-semibold text-sm mb-1">Aucun pack actif</h2>
-            <p className="text-xs text-[#8A8A8A]">Choisissez un pack pour commencer à gagner de l'argent</p>
-          </div>
-          <h2 className="text-lg font-semibold mb-3">Packs disponibles</h2>
-          <div className="space-y-3">
-            {plans.map((plan, index) => (
-              <motion.div key={plan.name} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
-                <Card className="overflow-hidden">
-                  <div className={`h-2 bg-gradient-to-r ${plan.color}`} />
-                  <CardContent className="p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <h3 className="font-semibold text-lg">{plan.name}</h3>
-                        <p className="text-2xl font-bold mt-1">{formatCurrency(plan.price)}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${plan.badgeColor}`}>{plan.badge}</span>
-                    </div>
-                    <div className="space-y-2 mb-4">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#8A8A8A]">Tâches</span>
-                        <span className="font-medium">{plan.tasks}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-[#8A8A8A]">Rentabilité</span>
-                        <span className="font-medium text-green-500">{plan.profitability}</span>
-                      </div>
-                    </div>
-                    <Button className="w-full" variant={plan.name === "Gold" ? "purple" : "outline"} onClick={() => router.push(`/invest?plan=${plan.name.toLowerCase()}`)}>
-                      <Crown className="w-4 h-4 mr-2" /> Choisir ce pack
-                    </Button>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Upgrade Banner - only visible when user has a pack */}
-      {hasPack ? (
-        showUpgradeCard ? (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="rounded-2xl border border-purple-200 bg-gradient-to-r from-purple-600 to-purple-800 p-5 text-white shadow-sm"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Crown className="w-5 h-5 text-yellow-400" />
-                <h3 className="font-bold text-lg">Améliorez votre plan</h3>
-              </div>
-              <p className="text-purple-100 text-sm">
-                {effectivePlanSlug === "bronze" || !effectivePlanSlug
-                  ? "Passez au Silver ou au Gold pour débloquer plus de tâches et des gains plus élevés."
-                  : "Passez au Gold pour profiter de toutes les missions disponibles."}
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 flex gap-2">
-            {(!effectivePlanSlug || effectivePlanSlug === "bronze") && (
-              <>
-                <Button size="sm" className="flex-1 bg-white/20 hover:bg-white/30 text-white border border-white/20" onClick={() => router.push("/invest?plan=silver")}>
-                  <Star className="w-3 h-3 mr-1" /> Silver
-                </Button>
-                <Button size="sm" className="flex-1 bg-yellow-400 text-purple-900 hover:bg-yellow-300" onClick={() => router.push("/invest?plan=gold")}>
-                  <Crown className="w-3 h-3 mr-1" /> Gold
-                </Button>
-              </>
-            )}
-            {effectivePlanSlug === "silver" && (
-              <Button size="sm" className="flex-1 bg-yellow-400 text-purple-900 hover:bg-yellow-300" onClick={() => router.push("/invest?plan=gold")}>
-                <Crown className="w-3 h-3 mr-1" /> Passer à Gold
-              </Button>
-            )}
-          </div>
-        </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-gradient-to-r from-yellow-500 to-yellow-600 rounded-2xl p-5 text-white"
-          >
-            <div className="flex items-center gap-2">
-              <Crown className="w-6 h-6 text-white" />
-              <div>
-                <h3 className="font-bold">Plan Gold</h3>
-                <p className="text-yellow-100 text-sm">Vous avez le meilleur pack ! Tâches illimitées.</p>
-              </div>
-            </div>
-          </motion.div>
-        )
-      ) : null}
+      {/* (Section packs/investissement supprimée — plateforme 100% gratuite) */}
 
       {/* Stats */}
       <motion.div
@@ -419,8 +437,8 @@ export default function DashboardPage() {
             <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center">
               <Wallet className="w-4 h-4 text-purple-500" />
             </div>
-            <p className="text-xs text-[#8A8A8A]">Capital investi</p>
-            <p className="text-sm font-bold">{formatCurrency(wallet?.invested_capital || 0)}</p>
+            <p className="text-xs text-[#8A8A8A]">Tâches disponibles</p>
+            <p className="text-sm font-bold">{tasks.length}</p>
           </div>
         </Card>
         <Card className="p-4">
@@ -435,12 +453,11 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Recent Transactions */}
-      {transactions.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-        >
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+      >
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
@@ -500,15 +517,11 @@ export default function DashboardPage() {
                     <div key={tx.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
-                          tx.type === "deposit" ? "bg-green-100 dark:bg-green-500/20" :
                           tx.type === "reward" ? "bg-purple-100 dark:bg-purple-500/20" :
-                          tx.type === "investment" ? "bg-blue-100 dark:bg-blue-500/20" :
                           "bg-gray-100 dark:bg-gray-500/20"
                         }`}>
-                          {tx.type === "deposit" ? <ArrowDownLeft className="w-4 h-4 text-green-500" /> :
-                           tx.type === "reward" ? <Gift className="w-4 h-4 text-purple-500" /> :
-                           tx.type === "investment" ? <Wallet className="w-4 h-4 text-blue-500" /> :
-                           <ArrowUpRight className="w-4 h-4 text-gray-500" />}
+                          {tx.type === "reward" ? <Gift className="w-4 h-4 text-purple-500" /> :
+                          <ArrowUpRight className="w-4 h-4 text-gray-500" />}
                         </div>
                         <div>
                           <p className="text-sm font-medium">{tx.description || tx.type}</p>
@@ -516,9 +529,9 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <span className={`text-sm font-semibold ${
-                        tx.type === "deposit" || tx.type === "reward" ? "text-green-500" : "text-red-500"
+                        tx.type === "reward" ? "text-green-500" : "text-red-500"
                       }`}>
-                        {tx.type === "deposit" || tx.type === "reward" ? "+" : "-"}{formatCurrency(tx.amount)}
+                        {tx.type === "reward" ? "+" : "-"}{formatCurrency(tx.amount)}
                       </span>
                     </div>
                   ))}
@@ -557,10 +570,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </motion.div>
-      )}
 
-      {/* Tasks Section - always shown when user has a pack */}
-      {tasks.length > 0 && (
+      {/* Tasks Section */}
+      {tasks.length > 0 ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Mes tâches</h2>
@@ -590,7 +602,7 @@ export default function DashboardPage() {
                           )}
                         </div>
                         <span className="text-sm font-bold text-green-500 whitespace-nowrap flex-shrink-0">
-                          +{formatCurrency(task.amount)}
+                          {formatTaskReward(task)}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-3">
@@ -616,7 +628,15 @@ export default function DashboardPage() {
           ))}
           
         </div>
-      )}
+      ) : !tasksLoading ? (
+        <div className="bg-purple-50 dark:bg-purple-500/10 rounded-xl p-4 text-center">
+          <p className="text-sm text-purple-700 dark:text-purple-300">
+            {completedToday > 0
+              ? "Votre tâche du jour est accomplie ✅ Revenez demain pour une nouvelle tâche gratuite."
+              : "Aucune tâche disponible pour le moment. Repassez bientôt !"}
+          </p>
+        </div>
+      ) : null}
 
     </div>
   );

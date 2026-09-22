@@ -79,7 +79,7 @@ export default function ProfilePage() {
     setReferralMsg(null);
     const result = await applyReferralCodeAction(referralCode);
     if (result?.success) {
-      setReferralMsg(`Code appliqué ! Votre parrain a reçu ${formatCurrency(result.commission || 0)}.`);
+      setReferralMsg("Code appliqué ! Vous êtes maintenant lié à votre parrain 🎉 (il gagnera 10% de vos gains).");
       setReferralCode("");
       // Recharger le parrain
       const supabase = createClient();
@@ -244,12 +244,8 @@ export default function ProfilePage() {
             <h3 className="font-semibold mb-3">Détails du wallet</h3>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-[#8A8A8A]">Capital investi</span>
-                <span className="font-medium">{formatCurrency(wallet?.invested_capital || 0)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[#8A8A8A]">Montant bloqué</span>
-                <span className="font-medium text-red-500">{formatCurrency(wallet?.locked_amount || 0)}</span>
+                <span className="text-[#8A8A8A]">Solde</span>
+                <span className="font-medium">{formatCurrency(wallet?.balance || 0)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-[#8A8A8A]">Montant disponible</span>

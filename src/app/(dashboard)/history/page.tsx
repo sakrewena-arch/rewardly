@@ -13,7 +13,7 @@ import { useAuth } from "@/context/AuthContext";
 import { HistoryAuth } from "@/components/features/AuthRequiredPages";
 
 type FilterPeriod = "all" | "today" | "week" | "month" | "year";
-type FilterType = "all" | "reward" | "deposit" | "withdrawal" | "investment" | "pending" | "approved" | "rejected";
+type FilterType = "all" | "reward" | "withdrawal" | "pending" | "approved" | "rejected";
 
 const periods: { key: FilterPeriod; label: string }[] = [
   { key: "all", label: "Tout" },
@@ -30,7 +30,7 @@ interface HistoryItem {
   amount: number;
   description: string;
   created_at: string;
-  icon: "deposit" | "reward" | "withdrawal" | "investment" | "task-pending" | "task-approved" | "task-rejected";
+  icon: "reward" | "withdrawal" | "task-pending" | "task-approved" | "task-rejected";
 }
 
 export default function HistoryPage() {
@@ -99,7 +99,7 @@ export default function HistoryPage() {
       if (statusFilter === "pending" && (item.type !== "submission" || item.status !== "pending")) return false;
       if (statusFilter === "approved" && (item.type !== "submission" || item.status !== "approved")) return false;
       if (statusFilter === "rejected" && (item.type !== "submission" || item.status !== "rejected")) return false;
-      if (["reward", "deposit", "withdrawal", "investment"].includes(statusFilter)) {
+      if (["reward", "withdrawal"].includes(statusFilter)) {
         if (item.type !== "transaction" || item.icon !== statusFilter) return false;
       }
       if (search && !item.description.toLowerCase().includes(search.toLowerCase())) return false;
@@ -114,10 +114,8 @@ export default function HistoryPage() {
 
   const getItemStyle = (item: HistoryItem) => {
     switch (item.icon) {
-      case "deposit": return { bg: "bg-green-100 dark:bg-green-500/20", color: "text-green-500", icon: <Wallet className="w-4 h-4" />, sign: "+" };
       case "reward": return { bg: "bg-purple-100 dark:bg-purple-500/20", color: "text-purple-500", icon: <Gift className="w-4 h-4" />, sign: "+" };
       case "withdrawal": return { bg: "bg-red-100 dark:bg-red-500/20", color: "text-red-500", icon: <TrendingUp className="w-4 h-4" />, sign: "-" };
-      case "investment": return { bg: "bg-blue-100 dark:bg-blue-500/20", color: "text-blue-500", icon: <TrendingUp className="w-4 h-4" />, sign: "-" };
       case "task-pending": return { bg: "bg-yellow-100 dark:bg-yellow-500/20", color: "text-yellow-500", icon: <Clock className="w-4 h-4" />, sign: "+" };
       case "task-approved": return { bg: "bg-green-100 dark:bg-green-500/20", color: "text-green-500", icon: <CheckCircle className="w-4 h-4" />, sign: "+" };
       case "task-rejected": return { bg: "bg-red-100 dark:bg-red-500/20", color: "text-red-500", icon: <XCircle className="w-4 h-4" />, sign: "+" };
@@ -223,9 +221,7 @@ export default function HistoryPage() {
             {[
               { key: "all", label: "Tout" },
               { key: "reward", label: "Gains" },
-              { key: "deposit", label: "Dépôts" },
               { key: "withdrawal", label: "Retraits" },
-              { key: "investment", label: "Investissements" },
               { key: "pending", label: "En attente" },
               { key: "approved", label: "Validées" },
               { key: "rejected", label: "Refusées" },

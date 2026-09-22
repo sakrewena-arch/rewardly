@@ -58,6 +58,7 @@ export async function createTaskAction(input: CreateTaskInput) {
     p_title: input.title,
     p_description: input.description || null,
     p_amount: input.amount,
+    p_amount_label: input.amount_label || null,
     p_plan_id: input.plan_id || null,
     p_category_id: input.category_id || null,
     p_icon: input.icon || "📋",
@@ -132,6 +133,7 @@ export async function updateTaskAction(input: {
   title?: string;
   description?: string;
   amount?: number;
+  amount_label?: string | null;
   plan_id?: string;
   icon?: string;
   estimated_time?: number;
@@ -153,6 +155,7 @@ export async function updateTaskAction(input: {
     p_title: input.title || null,
     p_description: input.description || null,
     p_amount: input.amount ?? null,
+    p_amount_label: input.amount_label ?? null,
     p_plan_id: input.plan_id || null,
     p_icon: input.icon || null,
     p_estimated_time: input.estimated_time ?? null,
