@@ -31,16 +31,10 @@ BEGIN
   END IF;
 END $$;
 
--- 1) Mémoriser les comptes admin à conserver
-CREATE TEMP TABLE _keep_admins AS
-  SELECT user_id AS id
-  FROM public.profiles
-  WHERE role IN ('admin', 'super_admin');
-
--- 2) Nettoyer les références croisées (parrainage)
+-- 1) Nettoyer les références croisées (parrainage)
 UPDATE public.profiles SET referred_by = NULL;
 
--- 3) Vider toutes les tables de données (ordre logique)
+-- 2) Vider toutes les tables de données (ordre logique)
 DO $$
 DECLARE
   t text;
@@ -72,24 +66,34 @@ BEGIN
   END LOOP;
 END $$;
 
--- 4) Supprimer wallets / profils des NON-admins
-DELETE FROM public.wallets   WHERE user_id NOT IN (SELECT id FROM _keep_admins);
-DELETE FROM public.profiles  WHERE user_id NOT IN (SELECT id FROM _keep_admins);
+-- 3) Supprimer wallets / profils des NON-admins
+-- ⚠️ Pas de table temporaire : le SQL Editor exécute chaque instruction dans
+--    une transaction séparée (les CREATE TEMP TABLE ne survivent pas). On
+--    passe par des sous-requêtes directes vers les profils administrateurs.
+DELETE FROM public.wallets
+WHERE user_id NOT IN (
+  SELECT user_id FROM public.profiles WHERE role IN ('admin', 'super_admin')
+);
 
--- 5) Supprimer les comptes auth des NON-admins (identités + users)
+DELETE FROM public.profiles
+WHERE user_id NOT IN (
+  SELECT user_id FROM public.profiles WHERE role IN ('admin', 'super_admin')
+);
+
+-- 4) Supprimer les comptes auth des NON-admins (identités + users)
 DO $$
 BEGIN
   IF to_regclass('auth.identities') IS NOT NULL THEN
-    EXECUTE 'DELETE FROM auth.identities WHERE user_id NOT IN (SELECT id FROM _keep_admins)';
+    EXECUTE 'DELETE FROM auth.identities WHERE user_id NOT IN (SELECT user_id FROM public.profiles WHERE role IN (''admin'', ''super_admin''))';
   END IF;
 END $$;
 
-DELETE FROM auth.users WHERE id NOT IN (SELECT id FROM _keep_admins);
+DELETE FROM auth.users
+WHERE id NOT IN (
+  SELECT user_id FROM public.profiles WHERE role IN ('admin', 'super_admin')
+);
 
--- 6) Nettoyage
-DROP TABLE _keep_admins;
-
--- 7) Vérification finale
+-- 5) Vérification finale
 DO $$
 DECLARE
   v_users int;
