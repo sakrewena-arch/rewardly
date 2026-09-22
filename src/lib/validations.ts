@@ -79,7 +79,6 @@ export const submitTaskSchema = z.object({
 export const systemSettingsSchema = z.object({
   platform_name: z.string().min(1),
   min_withdrawal: z.string().regex(/^\d+$/, "Nombre requis"),
-  withdrawal_day: z.string().regex(/^[0-6]$/, "Jour invalide (0-6)"),
   referral_commission_fixed: z.string().regex(/^\d+$/, "Nombre requis"),
   referral_commission_percent: z.string().regex(/^\d+$/, "Nombre requis"),
   max_referrals: z.string().regex(/^\d+$/, "Nombre requis"),

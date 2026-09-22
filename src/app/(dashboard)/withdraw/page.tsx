@@ -141,10 +141,10 @@ export default function WithdrawPage() {
             <div className="text-sm text-blue-700 dark:text-blue-300">
               <p className="font-medium">Conditions de retrait</p>
               <ul className="mt-1 space-y-0.5">
-                <li>• Retraits disponibles le vendredi uniquement</li>
+                <li>• Retraits disponibles à tout moment, 7j/7</li>
                 <li>• Minimum : {formatCurrency(minWithdrawal)} {currencySymbol}</li>
-                <li>• Attendre 7 jours après l'investissement</li>
-                <li>• Seuls les gains de tâches sont retirables (pas le capital investi)</li>
+                <li>• Seuls vos gains de tâches sont retirables</li>
+                <li>• Aucun dépôt ni investissement requis</li>
                 <li>• Délai de traitement : 24-48h</li>
               </ul>
             </div>

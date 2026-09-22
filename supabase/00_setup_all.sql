@@ -2155,8 +2155,8 @@ INSERT INTO system_settings (key, value, description)
 VALUES
   ('platform_name', '"Rewardly"', 'Nom de la plateforme'),
   ('min_withdrawal', '5000', 'Montant minimum de retrait'),
-  ('withdrawal_day', '5', 'Jour autorisé pour les retraits (0=Dimanche, 5=Vendredi)'),
-  ('investment_duration_days', '7', 'Duree d un investissement en jours'),
+  ('withdrawal_day', '5', 'Historique : restriction de jour supprimée (retrait possible tous les jours)'),
+  ('investment_duration_days', '7', 'Historique : durée d investissement supprimée'),
   ('referral_commission_fixed', '0', 'Ancienne commission fixe (inutilisée)'),
   ('referral_commission_percent', '10', 'Commission de parrainage : % des gains du filleul'),
   ('default_currency', '"XOF"', 'Devise par défaut'),
@@ -2510,8 +2510,6 @@ DECLARE
   v_withdrawable DECIMAL;
   v_withdrawal_id UUID;
   v_min_withdrawal DECIMAL;
-  v_withdrawal_day INTEGER;
-  v_timezone_offset INTEGER;
 BEGIN
   -- 🔒 Vérification : seul l'utilisateur connecté peut soumettre pour lui-même
   IF auth.uid() IS NULL OR auth.uid() != p_user_id THEN
@@ -2525,16 +2523,10 @@ BEGIN
 
   SELECT COALESCE((SELECT value::TEXT::NUMERIC FROM system_settings WHERE key = 'min_withdrawal'), 5000)
   INTO v_min_withdrawal;
-  SELECT COALESCE((SELECT value::TEXT::INTEGER FROM system_settings WHERE key = 'withdrawal_day'), 5)
-  INTO v_withdrawal_day;
-  SELECT COALESCE((SELECT value::TEXT::INTEGER FROM system_settings WHERE key = 'withdrawal_timezone_offset'), 0)
-  INTO v_timezone_offset;
 
-  -- 📅 Jour de retrait (UTC + offset configurable)
-  IF EXTRACT(DOW FROM (NOW() AT TIME ZONE 'UTC') + (v_timezone_offset * INTERVAL '1 hour')) != v_withdrawal_day THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Les retraits ne sont disponibles que le jour configuré');
-  END IF;
-
+  -- 🆓 Modèle 100% gratuit : plus de restriction de jour. L'ancienne condition
+  --    « retrait disponible le jour configuré » (liée à l'investissement) a été
+  --    supprimée — vos gains sont retirables à tout moment.
   IF p_amount < v_min_withdrawal THEN
     RETURN jsonb_build_object('success', false, 'error', 'Montant minimum de retrait: ' || v_min_withdrawal::TEXT || ' FCFA');
   END IF;

@@ -16,7 +16,6 @@ export default function AdminSettingsPage() {
   const [settings, setSettings] = useState({
     platform_name: "Rewardly",
     min_withdrawal: "5000",
-    withdrawal_day: "5",
     referral_commission_percent: "10",
     max_referrals: "50",
     maintenance_mode: "false",
@@ -27,9 +26,7 @@ export default function AdminSettingsPage() {
       if (data) {
         setSettings({
           platform_name: String(data.platform_name || "Rewardly").replace(/"/g, ""),
-          min_withdrawal: String(data.min_withdrawal || "5000").replace(/"/g, ""),
-          withdrawal_day: String(data.withdrawal_day || "5").replace(/"/g, ""),
-          referral_commission_percent: String(data.referral_commission_percent || "10").replace(/"/g, ""),
+          min_withdrawal: String(data.min_withdrawal || "5000").replace(/"/g, ""),          referral_commission_percent: String(data.referral_commission_percent || "10").replace(/"/g, ""),
           max_referrals: String(data.max_referrals || "50").replace(/"/g, ""),
           maintenance_mode: String(data.maintenance_mode || "false").replace(/"/g, ""),
         });
@@ -43,7 +40,6 @@ export default function AdminSettingsPage() {
     const result = await saveSystemSettingsAction({
       platform_name: JSON.stringify(settings.platform_name),
       min_withdrawal: settings.min_withdrawal,
-      withdrawal_day: settings.withdrawal_day,
       referral_commission_percent: settings.referral_commission_percent,
       max_referrals: settings.max_referrals,
       maintenance_mode: settings.maintenance_mode,
@@ -95,10 +91,6 @@ export default function AdminSettingsPage() {
                   <div className="space-y-1">
                     <label className="text-xs text-[#8A8A8A]">Retrait minimum (FCFA)</label>
                     <Input value={settings.min_withdrawal} onChange={(e) => setSettings({ ...settings, min_withdrawal: e.target.value })} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-[#8A8A8A]">Jour de retrait (0=Dim, 5=Vendredi)</label>
-                    <Input value={settings.withdrawal_day} onChange={(e) => setSettings({ ...settings, withdrawal_day: e.target.value })} />
                   </div>
                 </div>
               </CardContent>

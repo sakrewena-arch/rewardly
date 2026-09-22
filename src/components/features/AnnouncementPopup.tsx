@@ -49,7 +49,7 @@ export default function AnnouncementPopup() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[95]"
+          className="fixed inset-0 z-[95] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm overflow-y-auto"
           onClick={handleClose}
         >
           <motion.div
@@ -57,7 +57,7 @@ export default function AnnouncementPopup() {
             initial={{ scale: 0.95, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 30 }}
-            className="w-full max-w-md bg-white dark:bg-[#161616] rounded-3xl overflow-hidden shadow-2xl my-auto"
+            className="w-full max-w-md bg-white dark:bg-[#161616] rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* ======= HEADER URGENCE ======= */}

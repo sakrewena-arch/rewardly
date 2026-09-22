@@ -110,7 +110,6 @@ describe("systemSettingsSchema", () => {
     const result = systemSettingsSchema.safeParse({
       platform_name: "Rewardly",
       min_withdrawal: "5000",
-      withdrawal_day: "5",
       referral_commission_fixed: "500",
       referral_commission_percent: "5",
       max_referrals: "50",
@@ -119,12 +118,11 @@ describe("systemSettingsSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects invalid withdrawal day", () => {
+  it("rejects invalid commission value", () => {
     const result = systemSettingsSchema.safeParse({
       platform_name: "Rewardly",
       min_withdrawal: "5000",
-      withdrawal_day: "9",
-      referral_commission_fixed: "500",
+      referral_commission_fixed: "abc",
       referral_commission_percent: "5",
       max_referrals: "50",
       maintenance_mode: "false",

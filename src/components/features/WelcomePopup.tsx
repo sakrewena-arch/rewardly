@@ -134,13 +134,13 @@ export default function WelcomePopup() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto"
+          className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto"
         >
           <motion.div
             initial={{ scale: 0.9, y: 30 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.9, y: 30 }}
-            className="w-full max-w-md bg-white dark:bg-[#161616] rounded-3xl overflow-hidden shadow-2xl my-auto"
+            className="w-full max-w-md bg-white dark:bg-[#161616] rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto"
           >
             {/* Logo + Header */}
             <div className="card-gradient p-6 text-center relative">
