@@ -1540,7 +1540,7 @@ CREATE OR REPLACE FUNCTION create_task(
   p_description TEXT,
   p_amount DECIMAL,
   p_amount_label TEXT DEFAULT NULL,
-  p_plan_id UUID,
+  p_plan_id UUID DEFAULT NULL,
   p_category_id UUID DEFAULT NULL,
   p_icon TEXT DEFAULT '📋',
   p_estimated_time INTEGER DEFAULT NULL,
