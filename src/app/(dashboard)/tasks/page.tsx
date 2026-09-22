@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Clock, Search, Lock, CheckCircle, Info, Sparkles, Check, Upload, Link2, Video, ExternalLink, X, Share2, Eye, AlertCircle, ListChecks } from "lucide-react";
+import { Clock, Search, Lock, CheckCircle, Info, Sparkles, Check, Upload, Link2, Video, ExternalLink, X, Share2, Eye, AlertCircle, ListChecks, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -150,12 +150,35 @@ export default function TasksPage() {
     });
   };
 
+  // ============================================================
+  // CONSTRUCTION DU MESSAGE PARTAGÉ
+  // ORDRE respecté : [Image/Vidéo] → [Texte] → [Lien]
+  // ============================================================
+  const buildShareMessage = () => {
+    if (!shareModal) return { text: "", link: "", fullMessage: "" };
+    const link = shareModal.link ? normalizeUrl(shareModal.link) : window.location.href;
+
+    // 📝 Texte = titre + consignes (le média est placé AVANT via l'aperçu
+    //    et joint séparément par l'API de partage native).
+    let text = `${shareModal.title} — Rejoignez-nous !`;
+    const instructions = (shareModal.instructions || "").trim();
+    if (instructions) text += `\n${instructions}`;
+
+    return { text, link, fullMessage: `${text}\n${link}` };
+  };
+
   // Copy the link to share to clipboard
   const copyShareLink = () => {
     if (!shareModal) return;
-    const link = shareModal.link ? normalizeUrl(shareModal.link) : window.location.href;
-    navigator.clipboard.writeText(link);
+    navigator.clipboard.writeText(buildShareMessage().link);
     alert("Lien copié dans le presse-papiers !");
+  };
+
+  // Copy the full message (text + link) to clipboard
+  const copyShareMessage = () => {
+    if (!shareModal) return;
+    navigator.clipboard.writeText(buildShareMessage().fullMessage);
+    alert("Message partagé copié (texte + lien) !");
   };
 
   // Increment share count (user clicked "J'ai partagé")
@@ -189,18 +212,19 @@ export default function TasksPage() {
 
   // Share the task element (link + image/video) via native share sheet
   // or deep links to the chosen app (WhatsApp, Telegram, Facebook...)
+  // ORDRE DU PARTAGE : [Image/Vidéo] → [Texte] → [Lien]
   // NOTE: Le partage n'incrémente PAS la progression automatiquement.
   // L'utilisateur doit cliquer sur "J'ai partagé" pour valider chaque partage.
   const shareViaApp = async () => {
     if (!shareModal) return;
-    const text = `${shareModal.title} — Rejoignez-nous !`;
-    const link = shareModal.link ? normalizeUrl(shareModal.link) : window.location.href;
+    const { text, link } = buildShareMessage();
 
-    // Build files array (media) + link, share BOTH simultaneously
+    // Build files array (media) + text + link, share ALL together
+    // → le destinataire voit : [image/vidéo] puis le texte, puis le lien.
     const mediaFile = shareModal.mediaData ? base64ToFile(shareModal.mediaData) : null;
     const files = mediaFile ? [mediaFile] : [];
 
-    // Try native Web Share API first (shares media + link together on mobile)
+    // Try native Web Share API first (shares media + text + link on mobile)
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         const shareData: any = { title: shareModal.title, text, url: link };
@@ -216,8 +240,9 @@ export default function TasksPage() {
       }
     }
 
-    // Fallback: deep links to specific apps (link is shared; media shared manually)
-    const encodedText = encodeURIComponent(`${text} ${link}`);
+    // Fallback: deep links to specific apps (TEXTE puis LIEN ;
+    // l'image/vidéo se joint MANUELLEMENT dans l'application cible).
+    const encodedText = encodeURIComponent(text + "\n" + link);
     const appLinks: Record<string, string> = {
       whatsapp: `https://wa.me/?text=${encodedText}`,
       telegram: `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`,
@@ -732,6 +757,18 @@ export default function TasksPage() {
             {/* ===== ÉTAPE 1 : PARTAGER ===== */}
             {shareModal.step === "share" && (
               <>
+                {/* 🖼️ MÉDIA EN PREMIER (image/vidéo) — ordre : média → texte → lien */}
+                {shareModal.mediaData && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-[#8A8A8A] mb-1">Aperçu du partage : image/vidéo en premier</p>
+                    {shareModal.mediaType === "video" ? (
+                      <video src={shareModal.mediaData} className="w-full rounded-xl max-h-48 bg-black" muted />
+                    ) : (
+                      <img src={shareModal.mediaData} alt="Aperçu du média à partager" className="w-full rounded-xl max-h-48 object-cover" />
+                    )}
+                  </div>
+                )}
+
                 {shareModal.instructions && (
                   <p className="text-sm text-[#8A8A8A] bg-gray-50 dark:bg-white/5 p-3 rounded-lg mb-4">{shareModal.instructions}</p>
                 )}
@@ -751,6 +788,9 @@ export default function TasksPage() {
                     <Link2 className="w-4 h-4 mr-2" /> Copier le lien à partager
                   </Button>
                 )}
+                <Button size="lg" variant="outline" className="w-full mb-1" onClick={copyShareMessage}>
+                  <FileText className="w-4 h-4 mr-2" /> Copier texte + lien
+                </Button>
 
                 <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 mb-4">
                   <div className="flex items-center justify-between mb-2">
@@ -774,8 +814,13 @@ export default function TasksPage() {
                 <p className="text-xs text-[#8A8A8A] text-center mb-4">
                   {typeof navigator !== "undefined" && typeof navigator.share === "function"
                     ? "Choisissez l'application dans la fenêtre de partage"
-                    : `L'application ${shareModal.app} s'ouvrira avec le lien à partager`}
+                    : `L'application ${shareModal.app} s'ouvrira avec le texte et le lien à partager`}
                 </p>
+                {shareModal.mediaData && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 text-center flex items-center justify-center gap-1 mb-3">
+                    <AlertCircle className="w-3 h-3" /> Si l'image/vidéo n'est pas ajoutée automatiquement, joignez-la au même message.
+                  </p>
+                )}
 
                 <Button className="w-full" size="lg" onClick={incrementShare}>
                   <Check className="w-4 h-4 mr-2" /> J'ai partagé ({shareModal.shareCount}/{shareModal.targetCount})
