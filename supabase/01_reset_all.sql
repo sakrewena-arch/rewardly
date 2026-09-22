@@ -21,11 +21,13 @@
 -- 0) Déconnecter tout le monde (sessions / refresh tokens)
 DO $$
 BEGIN
+  -- ⚠️ TRUNCATE ... CASCADE requis : auth.refresh_tokens (et auth.mfa_amr_claims)
+  -- possèdent une clé étrangère vers auth.sessions → un simple TRUNCATE échoue.
   IF to_regclass('auth.sessions') IS NOT NULL THEN
-    EXECUTE 'TRUNCATE auth.sessions';
+    EXECUTE 'TRUNCATE auth.sessions CASCADE';
   END IF;
   IF to_regclass('auth.refresh_tokens') IS NOT NULL THEN
-    EXECUTE 'TRUNCATE auth.refresh_tokens';
+    EXECUTE 'TRUNCATE auth.refresh_tokens CASCADE';
   END IF;
 END $$;
 
