@@ -2,6 +2,7 @@
 
 import { BottomNav } from "@/components/layout/BottomNav";
 import WelcomePopup from "@/components/features/WelcomePopup";
+import AnnouncementPopup from "@/components/features/AnnouncementPopup";
 import { NavProvider } from "@/context/NavContext";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -11,6 +12,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {children}
         <BottomNav />
         <WelcomePopup />
+        <AnnouncementPopup />
       </div>
     </NavProvider>
   );
