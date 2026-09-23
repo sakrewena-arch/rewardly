@@ -151,17 +151,29 @@ export function useTasks() {
 
   // Toutes les tâches actives (gratuit, sans restriction de plan)
   const allActiveTasks = tasks;
-  const availableTasks = allActiveTasks;
+
+  // 🔁 PROGRESSION : on exclut les tâches DÉJÀ accomplies (soumissions
+  //    approuvées ou en attente) pour proposer TOUJOURS la tâche SUIVANTE.
+  //    → après 24h, l'utilisateur ne revoit plus la tâche de la veille.
+  const alreadyDoneTaskIds = new Set(
+    submissions
+      .filter((s) => s.status === "approved" || s.status === "pending")
+      .map((s) => s.task_id)
+  );
+  const remainingTasks = allActiveTasks.filter((t) => !alreadyDoneTaskIds.has(t.id));
+  const availableTasks = remainingTasks;
 
   // ✅ Quota quotidien atteint ? (1 tâche complétée ou en attente aujourd'hui)
   const completedToday = todayCompletedTaskIds.length > 0 ? 1 : 0;
 
-  // 🔒 Côté AFFICHAGE : on ne montre qu'UNE SEULE tâche par jour
-  //    (0 tâche si la tâche du jour est déjà accomplie).
+  // 🔒 Côté AFFICHAGE : UNE SEULE tâche par jour, et c'est la PROCHAINE
+  //    non accomplie (0 tâche si le quota est atteint OU s'il ne reste
+  //    aucune tâche à accomplir).
   const limitedTasks: Task[] =
-    completedToday >= dailyLimit ? [] : allActiveTasks.slice(0, dailyLimit);
+    completedToday >= dailyLimit ? [] : remainingTasks.slice(0, dailyLimit);
 
-  const allTasksCompleted = false;
+  // Plus aucune tâche actives non accomplie → on affiche « patientez »
+  const allTasksCompleted = remainingTasks.length === 0;
 
   const completeTask = useCallback(async (taskId: string) => {
     // ✅ Ajouter la tâche à la liste "aujourd'hui" (quota 1/jour)
@@ -187,7 +199,7 @@ export function useTasks() {
     isUnlimited,
     completedToday,
     // Nombre de tâches encore disponibles AUJOURD'HUI (0 ou 1)
-    totalPlanTasks: completedToday >= dailyLimit ? 0 : allActiveTasks.length > 0 ? 1 : 0,
+    totalPlanTasks: completedToday >= dailyLimit ? 0 : remainingTasks.length > 0 ? 1 : 0,
     allTasksCompleted,
     completeTask,
     refreshTasks,

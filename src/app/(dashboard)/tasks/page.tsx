@@ -26,7 +26,7 @@ interface TaskField {
 export default function TasksPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { tasks, allTasks, isLoading, dailyLimit, completedToday, totalPlanTasks, completeTask, addSubmission } = useTasks();
+  const { tasks, allTasks, isLoading, dailyLimit, completedToday, totalPlanTasks, allTasksCompleted, completeTask, addSubmission } = useTasks();
   const [search, setSearch] = useState("");
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState<string | null>(null);
@@ -560,10 +560,14 @@ export default function TasksPage() {
               <>
                 <Clock className="w-12 h-12 text-amber-500 mx-auto mb-3" />
                 <p className="font-semibold text-[#111111] dark:text-white">
-                  Pas de nouvelles tâches pour le moment
+                  {allTasksCompleted
+                    ? "Vous avez accompli toutes les tâches disponibles"
+                    : "Aucune tâche disponible pour le moment"}
                 </p>
                 <p className="text-sm text-[#8A8A8A] mt-1">
-                  Veuillez patienter ou repassez dans quelques heures le temps que les tâches soient ajoutées.
+                  {allTasksCompleted
+                    ? "De nouvelles missions arrivent bientôt — veuillez patienter et repasser plus tard."
+                    : "Veuillez patienter, de nouvelles tâches seront bientôt ajoutées. Revenez un peu plus tard !"}
                 </p>
               </>
             )}
