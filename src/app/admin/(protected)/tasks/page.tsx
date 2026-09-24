@@ -519,7 +519,7 @@ export default function AdminTasksPage() {
                         <Input
                           type="file"
                           accept={mediaType === "image" ? "image/*" : "video/*"}
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file && mediaType === "image") {
                               // Compress image client-side to stay under the request limit
@@ -553,6 +553,24 @@ export default function AdminTasksPage() {
                               const supabase = createClient();
                               if (!supabase) {
                                 alert("Impossible d'initialiser l'upload de la vidéo.");
+                                return;
+                              }
+                              // 🔒 Vérification de session + rôle AVANT l'upload
+                              // (transforme l'erreur RLS obscure en message clair).
+                              const { data: { session } } = await supabase.auth.getSession();
+                              if (!session?.user) {
+                                setMediaUploading(false);
+                                alert("Session expirée : reconnectez-vous puis réessayez l'upload.");
+                                return;
+                              }
+                              const { data: profileRow } = await supabase
+                                .from("profiles")
+                                .select("role")
+                                .eq("user_id", session.user.id)
+                                .maybeSingle();
+                              if (!profileRow || !["admin", "super_admin"].includes(profileRow.role)) {
+                                setMediaUploading(false);
+                                alert("Upload refusé : votre compte doit avoir le rôle administrateur (rôle actuel : " + (profileRow?.role || "absent") + ").");
                                 return;
                               }
                               const safeName = (file.name || "video").replace(/[^\w.-]/g, "_");
