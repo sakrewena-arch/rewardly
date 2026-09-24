@@ -303,9 +303,13 @@ export default function AdminTasksPage() {
       } else {
         setFeedback(result?.error || "Erreur lors de la création de la tâche.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to create task", e);
-      setFeedback("Erreur lors de la création de la tâche");
+      const msg =
+        typeof e?.message === "string" && e.message
+          ? `Erreur lors de la création de la tâche — ${e.message}`
+          : "Erreur lors de la création de la tâche (réessayez avec une vidéo plus courte).";
+      setFeedback(msg);
     } finally {
       setSubmitting(false);
     }
@@ -543,9 +547,10 @@ export default function AdminTasksPage() {
                               reader.readAsDataURL(file);
                             } else if (file && mediaType === "video") {
                               // Vidéos : encodage BASE64 (comme les images) — stocké dans la
-                              // tâche, AUCUNE permission Storage requise.
-                              if (file.size > 8 * 1024 * 1024) {
-                                alert("Vidéo trop volumineuse. Taille maximale : 8 Mo.");
+                              // tâche, AUCUNE permission Storage requise. Limite 2,5 Mo pour
+                              // rester sous les limites de requête (dev, Vercel, Supabase).
+                              if (file.size > 2.5 * 1024 * 1024) {
+                                alert("Vidéo trop volumineuse. Taille maximale : 2,5 Mo.");
                                 return;
                               }
                               const reader = new FileReader();
@@ -556,11 +561,11 @@ export default function AdminTasksPage() {
                               };
                               reader.readAsDataURL(file);
                             } else if (file) {
-                              alert("Veuillez joindre une vidéo (max 8 Mo) dans le champ Vidéo.");
+                              alert("Veuillez joindre une vidéo (max 2,5 Mo) dans le champ Vidéo.");
                             }
                           }}
                         />
-                        <p className="text-[10px] text-[#8A8A8A]">{mediaType === "video" ? "Vidéo ≤ 8 Mo : encodée et stockée avec la tâche (comme les images, aucune permission requise)." : "Les images sont automatiquement compressées."}</p>
+                        <p className="text-[10px] text-[#8A8A8A]">{mediaType === "video" ? "Vidéo ≤ 2,5 Mo : encodée et stockée avec la tâche (comme les images, aucune permission requise)." : "Les images sont automatiquement compressées."}</p>
                         {mediaPreview ? (
                           mediaType === "image" ? (
                             <img src={mediaPreview} alt="Aperçu" className="w-full max-h-48 object-contain rounded-xl" />
