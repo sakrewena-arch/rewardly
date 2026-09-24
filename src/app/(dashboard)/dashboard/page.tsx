@@ -103,8 +103,10 @@ export default function DashboardPage() {
       .eq("status", "rejected")
       .order("created_at", { ascending: false })
       .limit(10)
-      .then((res: any) => setRejectedTasks(res.data || []))
-      .catch(() => setRejectedTasks([]));
+      .then(
+        (res: any) => setRejectedTasks(res.data || []),
+        () => setRejectedTasks([])
+      );
   }, [user]);
 
   // Charger les annonces masquées
