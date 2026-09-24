@@ -27,7 +27,7 @@
 -- ============================================================
 -- Ce fichier regroupe TOUT le SQL nécessaire pour la plateforme.
 -- Il est IDEMPOTENT : peut être exécuté plusieurs fois sans erreur.
--- Utilise IF NOT EXISTS / DROP IF EXISTS / DO $$ blocks partout.
+-- Utilise IF NOT EXISTS / DROP IF EXISTS / blocs DO ... END partout.
 -- ============================================================
 
 -- ============================================================
@@ -577,7 +577,7 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, auth
-AS $handler$
+AS $$
 DECLARE
   v_code text := NULL;
   v_meta_code text := NULL;
@@ -628,7 +628,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$handler$;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
