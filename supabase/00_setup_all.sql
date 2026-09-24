@@ -2305,21 +2305,21 @@ DECLARE
   missing TEXT;
 BEGIN
   missing := '';
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'profiles') THEN missing := missing || 'profiles, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'wallets') THEN missing := missing || 'wallets, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'wallet_transactions') THEN missing := missing || 'wallet_transactions, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'plans') THEN missing := missing || 'plans, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'investments') THEN missing := missing || 'investments, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'tasks') THEN missing := missing || 'tasks, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'task_submissions') THEN missing := missing || 'task_submissions, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'deposits') THEN missing := missing || 'deposits, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'withdrawals') THEN missing := missing || 'withdrawals, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'notifications') THEN missing := missing || 'notifications, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'system_settings') THEN missing := missing || 'system_settings, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'admin_logs') THEN missing := missing || 'admin_logs, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'user_preferences') THEN missing := missing || 'user_preferences, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'service_orders') THEN missing := missing || 'service_orders, '; END IF;
-  IF NOT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'push_tokens') THEN missing := missing || 'push_tokens, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles') THEN missing := missing || 'profiles, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'wallets') THEN missing := missing || 'wallets, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'wallet_transactions') THEN missing := missing || 'wallet_transactions, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'plans') THEN missing := missing || 'plans, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'investments') THEN missing := missing || 'investments, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tasks') THEN missing := missing || 'tasks, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'task_submissions') THEN missing := missing || 'task_submissions, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'deposits') THEN missing := missing || 'deposits, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'withdrawals') THEN missing := missing || 'withdrawals, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'notifications') THEN missing := missing || 'notifications, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'system_settings') THEN missing := missing || 'system_settings, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'admin_logs') THEN missing := missing || 'admin_logs, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_preferences') THEN missing := missing || 'user_preferences, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'service_orders') THEN missing := missing || 'service_orders, '; END IF;
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'push_tokens') THEN missing := missing || 'push_tokens, '; END IF;
   
   IF missing != '' THEN
     RAISE EXCEPTION 'Tables manquantes: %', missing;
