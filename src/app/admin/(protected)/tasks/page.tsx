@@ -534,8 +534,9 @@ export default function AdminTasksPage() {
                                 img.src = reader.result as string;
                               };
                               reader.readAsDataURL(file);
-                            } else if (file && file.size <= 8 * 1024 * 1024) {
-                              // Videos: limit to 8 MB to stay safely under the body limit
+                            } else if (file && file.size <= 2.5 * 1024 * 1024) {
+                              // Vidéos : 2,5 Mo max (base64 ≈ +33 %) pour rester sous les
+                              // limites de requête (Server Actions + API Supabase).
                               const reader = new FileReader();
                               reader.onload = () => {
                                 const data = reader.result as string;
@@ -544,10 +545,11 @@ export default function AdminTasksPage() {
                               };
                               reader.readAsDataURL(file);
                             } else if (file) {
-                              alert("Vidéo trop volumineuse. La taille maximale est de 8 MB.");
+                              alert("Vidéo trop volumineuse. Taille maximale : 2,5 Mo. Réduisez la durée ou convertissez la vidéo.");
                             }
                           }}
                         />
+                        <p className="text-[10px] text-[#8A8A8A]">{mediaType === "video" ? "Vidéo ≤ 2,5 Mo recommandée." : "Les images sont automatiquement compressées."}</p>
                         {mediaPreview && (
                           mediaType === "image" ? (
                             <img src={mediaPreview} alt="Aperçu" className="w-full max-h-48 object-contain rounded-xl" />

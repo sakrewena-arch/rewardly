@@ -49,6 +49,13 @@ export async function getTaskFields(taskId: string) {
 export async function createTaskAction(input: CreateTaskInput) {
   const admin = await requireAdmin();
   if (!admin) return { success: false, error: "Non autorisé" };
+  // Garde-fou : le contenu (vidéo en base64) doit rester sous les limites d'API
+  if (input.instructions && input.instructions.length > 9_500_000) {
+    return {
+      success: false,
+      error: "Le contenu vidéo est trop volumineux (max ~2,5 Mo). Convertissez la vidéo ou réduisez sa durée, puis réessayez.",
+    };
+  }
   // Utiliser le client admin (service role) pour contourner les problèmes de session/RLS
   const adminClient = createAdminClient();
   const supabase = adminClient || (await createClient());

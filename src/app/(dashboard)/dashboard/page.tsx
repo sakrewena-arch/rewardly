@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowUpRight, Wallet, TrendingUp, Gift, Eye, EyeOff, ExternalLink, Clock, Bell, Megaphone, X, ChevronDown, Lock, Rocket, CheckCircle } from "lucide-react";
+import { ArrowUpRight, Wallet, TrendingUp, Gift, Eye, EyeOff, ExternalLink, Clock, Bell, Megaphone, X, XCircle, ChevronDown, Lock, Rocket, CheckCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/hooks/useWallet";
 import { useTasks } from "@/hooks/useTasks";
@@ -25,6 +25,8 @@ export default function DashboardPage() {
   const [txFilter, setTxFilter] = useState<"today" | "week" | "month" | "year" | "all">("all");
   const [showAllTx, setShowAllTx] = useState(false);
   const [txExpanded, setTxExpanded] = useState(true);
+  // Tâches refusées récentes (avec le motif retourné par l'admin)
+  const [rejectedTasks, setRejectedTasks] = useState<any[]>([]);
 
   // Charger les notifications (annonces) pour l'utilisateur connecté
   useEffect(() => {
@@ -89,6 +91,22 @@ export default function DashboardPage() {
     };
   }, [user]);
 
+  // Charger les tâches refusées récentes (avec le motif) pour « Transactions récentes »
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    if (!supabase) return;
+    supabase
+      .from("task_submissions")
+      .select("id, admin_comment, created_at, tasks(title)")
+      .eq("user_id", user.id)
+      .eq("status", "rejected")
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .then((res: any) => setRejectedTasks(res.data || []))
+      .catch(() => setRejectedTasks([]));
+  }, [user]);
+
   // Charger les annonces masquées
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -102,6 +120,17 @@ export default function DashboardPage() {
     const next = [...dismissedAnnouncements, id];
     setDismissedAnnouncements(next);
     localStorage.setItem("rewardly_dismissed_announcements", JSON.stringify(next));
+  };
+
+  // Filtre de période commun aux transactions et aux tâches refusées
+  const inPeriod = (createdAt: string) => {
+    const date = new Date(createdAt);
+    const now = new Date();
+    if (txFilter === "today") return date.toDateString() === now.toDateString();
+    if (txFilter === "week") return date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    if (txFilter === "month") return date >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    if (txFilter === "year") return date.getFullYear() === now.getFullYear();
+    return true;
   };
 
   // ============================================================
@@ -563,6 +592,32 @@ export default function DashboardPage() {
                   >
                     {showAllTx ? "Voir moins" : "Voir plus"}
                   </button>
+                )}
+
+                {/* Tâches refusées (avec le motif) */}
+                {rejectedTasks.filter((r) => inPeriod(r.created_at)).length > 0 && (
+                  <div className="mt-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-red-500 mb-2">
+                      <XCircle className="w-4 h-4" />
+                      Tâche{rejectedTasks.filter((r) => inPeriod(r.created_at)).length > 1 ? "s" : ""} refusée{rejectedTasks.filter((r) => inPeriod(r.created_at)).length > 1 ? "s" : ""}
+                    </div>
+                    <div className="space-y-3">
+                      {rejectedTasks.filter((r) => inPeriod(r.created_at)).map((r) => (
+                        <div key={r.id} className="bg-red-50 dark:bg-red-500/10 rounded-xl p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium flex-1 truncate-2">{r.tasks?.title || "Tâche"}</p>
+                            <span className="text-xs font-semibold text-red-500">Refusée</span>
+                          </div>
+                          {r.admin_comment && (
+                            <p className="text-xs text-red-700 dark:text-red-300 mt-1 leading-relaxed">
+                              <strong>Motif :</strong> {r.admin_comment}
+                            </p>
+                          )}
+                          <p className="text-xs text-[#8A8A8A] mt-1">{formatDate(r.created_at, "relative")}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
               </>
