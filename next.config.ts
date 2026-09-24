@@ -2,10 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Increase Server Actions body size limit to allow media uploads (images/videos)
-  // Per official docs: bodySizeLimit goes inside experimental.serverActions
+  // Une vidéo de 15 Mo → ~20 Mo en base64 → 40 Mo laisse la marge pour le JSON.
   experimental: {
     serverActions: {
-      bodySizeLimit: "25mb",
+      bodySizeLimit: "40mb",
     },
   },
 };

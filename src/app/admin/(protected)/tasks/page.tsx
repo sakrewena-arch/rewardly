@@ -547,10 +547,9 @@ export default function AdminTasksPage() {
                               reader.readAsDataURL(file);
                             } else if (file && mediaType === "video") {
                               // Vidéos : encodage BASE64 (comme les images) — stocké dans la
-                              // tâche, AUCUNE permission Storage requise. Limite 2,5 Mo pour
-                              // rester sous les limites de requête (dev, Vercel, Supabase).
-                              if (file.size > 2.5 * 1024 * 1024) {
-                                alert("Vidéo trop volumineuse. Taille maximale : 2,5 Mo.");
+                              // tâche, AUCUNE permission Storage requise. Limite 15 Mo.
+                              if (file.size > 15 * 1024 * 1024) {
+                                alert("Vidéo trop volumineuse. Taille maximale : 15 Mo.");
                                 return;
                               }
                               const reader = new FileReader();
@@ -561,11 +560,11 @@ export default function AdminTasksPage() {
                               };
                               reader.readAsDataURL(file);
                             } else if (file) {
-                              alert("Veuillez joindre une vidéo (max 2,5 Mo) dans le champ Vidéo.");
+                              alert("Veuillez joindre une vidéo (max 15 Mo) dans le champ Vidéo.");
                             }
                           }}
                         />
-                        <p className="text-[10px] text-[#8A8A8A]">{mediaType === "video" ? "Vidéo ≤ 2,5 Mo : encodée et stockée avec la tâche (comme les images, aucune permission requise)." : "Les images sont automatiquement compressées."}</p>
+                        <p className="text-[10px] text-[#8A8A8A]">{mediaType === "video" ? "Vidéo ≤ 15 Mo : encodée et stockée avec la tâche (comme les images, aucune permission requise)." : "Les images sont automatiquement compressées."}</p>
                         {mediaPreview ? (
                           mediaType === "image" ? (
                             <img src={mediaPreview} alt="Aperçu" className="w-full max-h-48 object-contain rounded-xl" />
