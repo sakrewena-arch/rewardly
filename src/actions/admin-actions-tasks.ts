@@ -49,13 +49,12 @@ export async function getTaskFields(taskId: string) {
 export async function createTaskAction(input: CreateTaskInput) {
   const admin = await requireAdmin();
   if (!admin) return { success: false, error: "Non autorisé" };
-  // Garde-fou de compatibilité (anciennes vidéos encodées en base64) :
-  // les nouvelles vidéos sont téléversées vers Supabase Storage (max 50 Mo)
-  // et référencées par URL, donc les instructions restent petites.
+  // Garde-fou : le contenu encodé (image/vidéo en base64) doit rester sous
+  // les limites de requête. Les vidéos sont limitées à 8 Mo côté formulaire.
   if (input.instructions && input.instructions.length > 9_500_000) {
     return {
       success: false,
-      error: "Le contenu vidéo est trop volumineux. Supprimez la vidéo actuelle et ré-ajoutez-la via le téléversement vidéo (max 50 Mo), puis réessayez.",
+      error: "Le contenu vidéo est trop volumineux. Utilisez une vidéo de 8 Mo maximum, puis réessayez.",
     };
   }
   // Utiliser le client admin (service role) pour contourner les problèmes de session/RLS
