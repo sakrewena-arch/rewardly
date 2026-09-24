@@ -1,6 +1,11 @@
 -- ============================================================
 -- REWARDLY — FICHIER UNIQUE D'INSTALLATION / CORRECTION
 -- ============================================================
+--   📌 VERSION DE CE FICHIER : SETUP_ALL_V4 (2026-09-22)
+--   📌 Vérifiez que ce numéro est visible dans votre SQL Editor.
+--      S'il est absent ou différent, vous exécutez une ANCIENNE
+--      copie : remplacez TOUT le contenu de l'éditeur par ce fichier.
+--
 --   ✅ UN SEUL fichier à exécuter (Supabase → SQL Editor → Run).
 --   ✅ IDEMPOTENT : exécutable plusieurs fois sans erreur
 --      (CREATE OR REPLACE / IF NOT EXISTS partout).
