@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { getTasks, createTaskAction, deleteTaskAction, getCategories, getSubmissions, approveSubmissionAction, rejectSubmissionAction } from "@/actions/admin-actions";
 
 interface TaskData {
@@ -92,6 +93,7 @@ export default function AdminTasksPage() {
   });
   const [mediaType, setMediaType] = useState<"image" | "video" | "">("");
   const [mediaPreview, setMediaPreview] = useState<string>("");
+  const [mediaUploading, setMediaUploading] = useState(false);
   const [fields, setFields] = useState<FieldInput[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -114,9 +116,9 @@ export default function AdminTasksPage() {
   // Parse [MEDIA] from task instructions to extract the actual image/video
   const parseMediaFromInstructions = (instructions: string | null) => {
     if (!instructions) return null;
-    const match = instructions.match(/\[MEDIA\] type=(\w+) data=(data:[^\s]+)/);
+    const match = instructions.match(/\[MEDIA\] type=(\w+) (?:data=(data:[^\s]+)|src=([^\s]+))/);
     if (!match) return null;
-    return { type: match[1] as "image" | "video", data: match[2] };
+    return { type: match[1] as "image" | "video", data: match[2] || match[3] };
   };
 
   // Parse [SHARE] from task instructions to extract share info
@@ -132,7 +134,7 @@ export default function AdminTasksPage() {
   const cleanInstructions = (instructions: string | null) => {
     if (!instructions) return "";
     return instructions
-      .replace(/\[MEDIA\] type=\w+ data=data:[^\s]+\n?/g, "")
+      .replace(/\[MEDIA\] type=\w+ (?:data=data:[^\s]+|src=[^\s]+)\n?/g, "")
       .replace(/\[SHARE\] app=\w* target=\w* count=\d*\n?/g, "")
       .trim();
   };
@@ -243,8 +245,15 @@ export default function AdminTasksPage() {
         finalInstructions = `[SHARE] app=${form.share_app} target=${form.share_target} count=${form.max_completions}\n${finalInstructions}`;
       }
       // Encode media (image/video) in instructions
+      // - image : data URL (compressée côté client)
+      // - vidéo : URL publique Supabase Storage (upload direct, jusqu'à 50 Mo)
       if (form.media_data && mediaType) {
-        finalInstructions = `[MEDIA] type=${mediaType} data=${form.media_data}\n${finalInstructions}`;
+        const isRemoteUrl = form.media_data.startsWith("https://");
+        const mediaRef =
+          mediaType === "video" && isRemoteUrl
+            ? `src=${form.media_data}`
+            : `data=${form.media_data}`;
+        finalInstructions = `[MEDIA] type=${mediaType} ${mediaRef}\n${finalInstructions}`;
       }
       // NB : choses à éviter → ajoutées comme ligne "NB :" dans les instructions
       // (affichées dans un encadré bien visible dans le panneau Instructions).
@@ -534,29 +543,63 @@ export default function AdminTasksPage() {
                                 img.src = reader.result as string;
                               };
                               reader.readAsDataURL(file);
-                            } else if (file && file.size <= 2.5 * 1024 * 1024) {
-                              // Vidéos : 2,5 Mo max (base64 ≈ +33 %) pour rester sous les
-                              // limites de requête (Server Actions + API Supabase).
-                              const reader = new FileReader();
-                              reader.onload = () => {
-                                const data = reader.result as string;
-                                setForm({ ...form, media_data: data });
-                                setMediaPreview(data);
-                              };
-                              reader.readAsDataURL(file);
+                            } else if (file && mediaType === "video") {
+                              // Vidéos : upload DIRECT vers Supabase Storage (max 50 Mo)
+                              // → URL publique stockée dans [MEDIA] src= (pas de base64).
+                              if (file.size > 50 * 1024 * 1024) {
+                                alert("Vidéo trop volumineuse. Taille maximale : 50 Mo.");
+                                return;
+                              }
+                              const supabase = createClient();
+                              if (!supabase) {
+                                alert("Impossible d'initialiser l'upload de la vidéo.");
+                                return;
+                              }
+                              const safeName = (file.name || "video").replace(/[^\w.-]/g, "_");
+                              const path = `tasks/${Date.now()}-${safeName}`;
+                              setMediaUploading(true);
+                              supabase.storage
+                                .from("task-media")
+                                .upload(path, file, {
+                                  contentType: file.type || "video/mp4",
+                                  upsert: true,
+                                })
+                                .then(
+                                  (res: any) => {
+                                    setMediaUploading(false);
+                                    if (res?.error) {
+                                      alert("Erreur d'upload de la vidéo : " + res.error.message);
+                                      return;
+                                    }
+                                    const { data: pub } = supabase.storage
+                                      .from("task-media")
+                                      .getPublicUrl(path);
+                                    const publicUrl = pub?.publicUrl || "";
+                                    if (publicUrl) {
+                                      setForm({ ...form, media_data: publicUrl });
+                                      setMediaPreview(publicUrl);
+                                    }
+                                  },
+                                  () => {
+                                    setMediaUploading(false);
+                                    alert("Erreur d'upload de la vidéo. Réessayez.");
+                                  }
+                                );
                             } else if (file) {
-                              alert("Vidéo trop volumineuse. Taille maximale : 2,5 Mo. Réduisez la durée ou convertissez la vidéo.");
+                              alert("Veuillez joindre une vidéo (max 50 Mo) dans le champ Vidéo.");
                             }
                           }}
                         />
-                        <p className="text-[10px] text-[#8A8A8A]">{mediaType === "video" ? "Vidéo ≤ 2,5 Mo recommandée." : "Les images sont automatiquement compressées."}</p>
-                        {mediaPreview && (
+                        <p className="text-[10px] text-[#8A8A8A]">{mediaType === "video" ? "Vidéo à téléverser (max 50 Mo) : téléversement direct vers Supabase Storage." : "Les images sont automatiquement compressées."}</p>
+                        {mediaUploading ? (
+                          <p className="text-xs text-purple-600 flex items-center gap-1 py-2"><Loader2 className="w-3 h-3 animate-spin" /> Upload de la vidéo en cours...</p>
+                        ) : mediaPreview ? (
                           mediaType === "image" ? (
                             <img src={mediaPreview} alt="Aperçu" className="w-full max-h-48 object-contain rounded-xl" />
                           ) : (
                             <video src={mediaPreview} controls className="w-full max-h-48 rounded-xl" />
                           )
-                        )}
+                        ) : null}
                       </div>
                     )}
                   </div>

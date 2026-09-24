@@ -2248,6 +2248,55 @@ CREATE POLICY "Admins can delete proofs" ON storage.objects
   );
 
 -- ============================================================
+-- 10bis. STORAGE BUCKET (task-media) — vidéos/images de tâches
+-- ============================================================
+-- Les vidéos de tâches sont téléversées ICI (jusqu'à 50 Mo) puis référencées
+-- par URL publique dans la balise [MEDIA] type=video src=<url> des instructions.
+-- Évite d'envoyer un énorme payload base64 via les Server Actions / l'API.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'task-media',
+  'task-media',
+  true,
+  57671680, -- 55 MB (≈50 Mo de fichier + marge)
+  ARRAY['video/*', 'image/*']
+)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Admins can upload task media" ON storage.objects;
+CREATE POLICY "Admins can upload task media" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'task-media'
+    AND EXISTS (
+      SELECT 1 FROM profiles
+      WHERE user_id = auth.uid()
+        AND role IN ('admin', 'super_admin')
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can update task media" ON storage.objects;
+CREATE POLICY "Admins can update task media" ON storage.objects
+  FOR UPDATE USING (
+    bucket_id = 'task-media'
+    AND EXISTS (
+      SELECT 1 FROM profiles
+      WHERE user_id = auth.uid()
+        AND role IN ('admin', 'super_admin')
+    )
+  );
+
+DROP POLICY IF EXISTS "Admins can delete task media" ON storage.objects;
+CREATE POLICY "Admins can delete task media" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'task-media'
+    AND EXISTS (
+      SELECT 1 FROM profiles
+      WHERE user_id = auth.uid()
+        AND role IN ('admin', 'super_admin')
+    )
+  );
+
+-- ============================================================
 -- 11. VERIFICATION
 -- ============================================================
 -- Vérifie que toutes les tables existent

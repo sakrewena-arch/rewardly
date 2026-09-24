@@ -78,15 +78,15 @@ export default function TasksPage() {
     imageViewed: boolean;
   } | null>(null);
 
-  // Parse [MEDIA] info from task instructions (image/video)
+  // Parse [MEDIA] info from task instructions (image/video — data URL ou URL publique)
   const parseMediaInfo = (task: any) => {
     const instructions = task.instructions || "";
-    const match = instructions.match(/\[MEDIA\] type=(\w+) data=(data:[^\s]+)/);
+    const match = instructions.match(/\[MEDIA\] type=(\w+) (?:data=(data:[^\s]+)|src=([^\s]+))/);
     if (!match) return null;
     return {
       type: match[1] as "image" | "video",
-      data: match[2],
-      cleanInstructions: instructions.replace(/\[MEDIA\] type=\w+ data=data:[^\s]+\n?/, ""),
+      data: match[2] || match[3],
+      cleanInstructions: instructions.replace(/\[MEDIA\] type=\w+ (?:data=data:[^\s]+|src=[^\s]+)\n?/, ""),
     };
   };
 
@@ -128,7 +128,7 @@ export default function TasksPage() {
     // Nettoyer les instructions : retirer [SHARE] ET [MEDIA]
     const cleanInstructions = (task.instructions || "")
       .replace(/\[SHARE\] app=\w+ target=\w+ count=\d+\n?/g, "")
-      .replace(/\[MEDIA\] type=\w+ data=data:[^\s]+\n?/g, "")
+      .replace(/\[MEDIA\] type=\w+ (?:data=data:[^\s]+|src=[^\s]+)\n?/g, "")
       .trim();
     setShareModal({
       open: true,
@@ -347,7 +347,7 @@ export default function TasksPage() {
   const getCleanInstructions = (task: any) => {
     return (task?.instructions || "")
       .replace(/\[SHARE\] app=\w+ target=\w+ count=\d+\n?/g, "")
-      .replace(/\[MEDIA\] type=\w+ data=data:[^\s]+\n?/g, "")
+      .replace(/\[MEDIA\] type=\w+ (?:data=data:[^\s]+|src=[^\s]+)\n?/g, "")
       .split("\n")
       .map((l: string) => l.trim())
       .filter((l: string) => l && !NB_LINE_PATTERN.test(l))
