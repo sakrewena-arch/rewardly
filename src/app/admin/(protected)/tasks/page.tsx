@@ -2,13 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Clock, Link2, Type, Hash, Image, Video, MessageCircle, Send, Target, Share2, ChevronDown, Filter, Loader2, AlertTriangle, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Clock, Link2, Type, Hash, Image, Video, MessageCircle, Send, Target, Share2, ChevronDown, Filter, Loader2, AlertTriangle, X, Ticket, BookOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { getTasks, createTaskAction, deleteTaskAction, getPlans, getCategories, getSubmissions, approveSubmissionAction, rejectSubmissionAction } from "@/actions/admin-actions";
+import {
+  PROMO_SITES,
+  PROMO_BONUSES,
+  buildPromoMarker,
+  buildShareMarker,
+  buildMediaMarker,
+} from "@/lib/task-markers";
 
 interface TaskData {
   id: string;
@@ -86,9 +93,14 @@ export default function AdminTasksPage() {
     max_completions: "",
     duration_minutes: "",
     validation_type: "auto" as "auto" | "manual",
-    task_type: "standard" as "standard" | "share",
+    task_type: "standard" as "standard" | "share" | "promo",
     share_app: "",
     share_target: "",
+    // Code promo (1xBet, BetWinner, 1Win…) — un seul champ à remplir : le code
+    promo_site: "1xbet",
+    promo_code: "",
+    promo_bonus: "bonus200",
+    promo_link: "",
     media_data: "", // base64 data for uploaded image/video
   });
   const [mediaType, setMediaType] = useState<"image" | "video" | "">("");
@@ -237,18 +249,40 @@ export default function AdminTasksPage() {
 
   const handleCreateTask = async () => {
     if (!form.title || !form.amount || !form.plan_id) return;
+    // 🔒 Cohérence : informations minimales exigées selon le type de tâche
+    if (form.task_type === "promo" && !form.promo_code.trim()) {
+      setFeedback("Renseignez le CODE PROMO à copier (ex : REWARD200).");
+      return;
+    }
+    if (form.task_type === "share" && !form.max_completions) {
+      setFeedback("Indiquez le nombre de partages demandés (ex : 10).");
+      return;
+    }
     setSubmitting(true);
     setFeedback(null);
     try {
       const effectivePlanId = form.plan_id === "all" ? null : form.plan_id;
-      // Encode share info in instructions for share-type tasks
+      // Marqueurs techniques encodés dans `instructions`
+      // (encodeurs/décodeurs partagés : src/lib/task-markers.ts)
       let finalInstructions = form.instructions || "";
       if (form.task_type === "share") {
-        finalInstructions = `[SHARE] app=${form.share_app} target=${form.share_target} count=${form.max_completions}\n${finalInstructions}`;
+        finalInstructions = `${buildShareMarker({
+          app: form.share_app || "whatsapp",
+          target: form.share_target || "contacts",
+          count: form.max_completions,
+        })}\n${finalInstructions}`;
+      }
+      if (form.task_type === "promo") {
+        finalInstructions = `${buildPromoMarker({
+          site: form.promo_site,
+          code: form.promo_code,
+          bonus: form.promo_bonus,
+          link: form.promo_link,
+        })}\n${finalInstructions}`;
       }
       // Encode media (image/video) in instructions
       if (form.media_data && mediaType) {
-        finalInstructions = `[MEDIA] type=${mediaType} data=${form.media_data}\n${finalInstructions}`;
+        finalInstructions = `${buildMediaMarker(mediaType, form.media_data)}\n${finalInstructions}`;
       }
       const result = await createTaskAction({
         title: form.title,
@@ -281,7 +315,9 @@ export default function AdminTasksPage() {
           title: "", description: "", amount: "", plan_id: "", category_id: "",
           icon: "📋", estimated_time: "", instructions: "", link: "",
           max_completions: "", duration_minutes: "", validation_type: "auto",
-          task_type: "standard", share_app: "", share_target: "", media_data: "",
+          task_type: "standard", share_app: "", share_target: "",
+          promo_site: "1xbet", promo_code: "", promo_bonus: "bonus200", promo_link: "",
+          media_data: "",
         });
         setMediaType("");
         setMediaPreview("");
@@ -553,7 +589,7 @@ export default function AdminTasksPage() {
 
                   <div className="md:col-span-2 space-y-2">
                     <label className="text-sm font-medium">Type de tâche</label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <button onClick={() => setForm({ ...form, task_type: "standard" })} className={`p-4 rounded-xl border-2 text-left transition-all ${form.task_type === "standard" ? "border-purple-500 bg-purple-50 dark:bg-purple-500/10" : "border-gray-200 dark:border-gray-700"}`}>
                         <div className="flex items-center gap-2 mb-1">
                           <CheckCircle className="w-5 h-5 text-purple-500" />
@@ -567,6 +603,13 @@ export default function AdminTasksPage() {
                           <span className="font-semibold text-sm">Partage</span>
                         </div>
                         <p className="text-xs text-[#8A8A8A]">Partager le lien dans WhatsApp, Telegram, Facebook...</p>
+                      </button>
+                      <button onClick={() => setForm({ ...form, task_type: "promo" })} className={`p-4 rounded-xl border-2 text-left transition-all ${form.task_type === "promo" ? "border-amber-500 bg-amber-50 dark:bg-amber-500/10" : "border-gray-200 dark:border-gray-700"}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Ticket className="w-5 h-5 text-amber-500" />
+                          <span className="font-semibold text-sm">Code promo</span>
+                        </div>
+                        <p className="text-xs text-[#8A8A8A]">1xBet, BetWinner, 1Win… le code à copier est mis en avant automatiquement.</p>
                       </button>
                     </div>
                   </div>
@@ -603,9 +646,74 @@ export default function AdminTasksPage() {
                     </>
                   )}
 
+                  {form.task_type === "promo" && (
+                    <div className="md:col-span-2 space-y-4 rounded-xl border-2 border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5 p-4">
+                      <div className="flex items-center gap-2">
+                        <Ticket className="w-4 h-4 text-amber-500" />
+                        <span className="font-semibold text-sm">Code promo à promouvoir</span>
+                      </div>
+                      <p className="text-xs text-[#8A8A8A]">
+                        Un seul champ à remplir : le <strong>code</strong>. Le message et le bouton « Copier »
+                        sont générés automatiquement côté utilisateur — plus besoin de rédiger le texte.
+                      </p>
+
+                      <div className="grid md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Site partenaire *</label>
+                          <select className="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 text-sm" value={form.promo_site} onChange={(e) => setForm({ ...form, promo_site: e.target.value })}>
+                            {Object.entries(PROMO_SITES).map(([key, site]) => (
+                              <option key={key} value={key}>{site.emoji} {site.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Code promo à copier *</label>
+                          <Input placeholder="Ex : REWARD200" value={form.promo_code} onChange={(e) => setForm({ ...form, promo_code: e.target.value.toUpperCase() })} />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Avantage mis en avant *</label>
+                          <select className="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 text-sm" value={form.promo_bonus} onChange={(e) => setForm({ ...form, promo_bonus: e.target.value })}>
+                            {Object.entries(PROMO_BONUSES).map(([key, label]) => (
+                              <option key={key} value={key}>{label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Lien d&apos;inscription (optionnel)</label>
+                          <Input placeholder={PROMO_SITES[form.promo_site]?.link || "https://..."} value={form.promo_link} onChange={(e) => setForm({ ...form, promo_link: e.target.value })} />
+                        </div>
+                      </div>
+
+                      {/* Aperçu exact de ce que verra l'utilisateur */}
+                      <div className="rounded-2xl border-2 border-amber-300 dark:border-amber-500/40 bg-white dark:bg-black/20 p-3 space-y-2">
+                        <p className="text-[11px] uppercase tracking-wide text-[#8A8A8A]">Aperçu côté utilisateur</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-sm">
+                            {PROMO_SITES[form.promo_site]?.emoji} {PROMO_SITES[form.promo_site]?.name}
+                          </span>
+                          <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-amber-500 text-white">
+                            {PROMO_BONUSES[form.promo_bonus]}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-amber-400 px-3 py-2.5 bg-amber-50 dark:bg-amber-500/10">
+                          <span className="font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300">
+                            {form.promo_code || "CODE"}
+                          </span>
+                          <span className="text-xs text-amber-700 dark:text-amber-300">Copier</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-sm font-medium">Instructions</label>
-                    <textarea className="w-full min-h-[80px] rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm" placeholder="Expliquez précisément ce que l'utilisateur doit faire..." value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-purple-500" /> Instructions
+                    </label>
+                    <textarea className="w-full min-h-[80px] rounded-xl border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm" placeholder={"Expliquez précisément ce que l'utilisateur doit faire...\n\nAstuce : numérotez vos étapes (1. 2. 3.) et commencez une ligne par « NB : » ou « ⚠️ » pour qu'elle s'affiche en ROUGE côté utilisateur."} value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+                    <p className="text-xs text-[#8A8A8A]">
+                      Les lignes « NB / Note / Important / ⚠️ » s&apos;affichent en rouge, les étapes numérotées en
+                      pastilles. L&apos;utilisateur retrouve ce texte via le bouton « Voir les instructions ».
+                    </p>
                   </div>
 
                   {form.task_type !== "share" && (
@@ -638,6 +746,23 @@ export default function AdminTasksPage() {
                         <p className="text-xs text-[#8A8A8A]">L'utilisateur doit fournir des preuves, validées par un admin avant crédit.</p>
                       </button>
                     </div>
+                    {/* Rappel de cohérence : ce que l'utilisateur devra faire */}
+                    <p className="text-xs text-[#8A8A8A] bg-gray-50 dark:bg-white/5 p-3 rounded-xl">
+                      {form.validation_type === "manual" ? (
+                        <>
+                          <strong>Mode manuel :</strong> l&apos;utilisateur devra envoyer{" "}
+                          {fields.length > 0 ? `${fields.length} preuve(s)` : "au moins une preuve"}
+                          {form.task_type === "share" ? " APRÈS avoir terminé le partage" : ""}
+                          {mediaType ? " (le média reste à regarder/voir)" : ""}. Ajoutez les champs ci-dessous ↓
+                        </>
+                      ) : (
+                        <>
+                          <strong>Mode automatique :</strong> le gain est crédité dès que l&apos;utilisateur clique
+                          sur le bouton{form.task_type === "share" ? " (après avoir partagé)" : ""}
+                          {mediaType ? " / après avoir vu le média" : ""}.
+                        </>
+                      )}
+                    </p>
                   </div>
                 </div>
 
@@ -700,7 +825,7 @@ export default function AdminTasksPage() {
 
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>
-                  <Button onClick={handleCreateTask} disabled={submitting || !form.title || !form.amount || !form.plan_id}>
+                  <Button onClick={handleCreateTask} disabled={submitting || !form.title || !form.amount || !form.plan_id || (form.task_type === "promo" && !form.promo_code.trim()) || (form.task_type === "share" && !form.max_completions)}>
                     {submitting ? "Création..." : "Créer la tâche"}
                   </Button>
                 </div>

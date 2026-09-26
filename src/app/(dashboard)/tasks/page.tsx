@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Clock, Search, Lock, CheckCircle, Info, Sparkles, Check, ArrowRight, Crown, Star, Zap, Upload, Link2, Type, Hash, Image, Video, MessageCircle, Send, ExternalLink, X, Share2, Eye } from "lucide-react";
+import { Clock, Search, Lock, CheckCircle, Info, Sparkles, Check, ArrowRight, Crown, Star, Zap, Upload, Link2, Type, Hash, Image, Video, MessageCircle, Send, ExternalLink, X, Share2, Eye, Copy, BookOpen, Ticket } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,12 +13,138 @@ import { useRouter } from "next/navigation";
 import { submitTaskAction } from "@/actions/user-actions";
 import { getTaskFields } from "@/actions/admin-actions";
 import { useNav } from "@/context/NavContext";
+import { parsePromoFromInstructions, cleanTaskInstructions } from "@/lib/task-markers";
 
 const availablePlans = [
   { name: "Bronze", slug: "bronze", price: 5000, tasks: "1 tâche/jour", profitability: "10% - 20%", badge: "Bronze", color: "from-amber-700 to-amber-600", badgeColor: "bg-amber-100 text-amber-700 dark:bg-amber-500/20" },
   { name: "Silver", slug: "silver", price: 10000, tasks: "3 tâches/jour", profitability: "20% - 30%", badge: "Silver", color: "from-gray-400 to-gray-300", badgeColor: "bg-gray-100 text-gray-600 dark:bg-gray-500/20" },
   { name: "Gold", slug: "gold", price: 20000, tasks: "Toutes les tâches", profitability: "40% - 50%", badge: "Premium", color: "from-yellow-500 to-yellow-400", badgeColor: "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20" },
 ];
+
+// ============================================================
+// Instructions : affichage COLORÉ
+//   • « NB / Note / Important / ⚠️ »  → ROUGE (mise en garde)
+//   • puces « - • * »                 → puce violette
+//   • « 1. 2. 3. »                    → pastille numérotée
+//   • le reste                        → texte normal
+// ============================================================
+function InstructionsBlock({ text, size = "sm" }: { text: string; size?: "sm" | "xs" }) {
+  const lines = (text || "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+
+  const textSize = size === "xs" ? "text-xs" : "text-sm";
+  const isWarning = (l: string) => /^(nb\b|n\.b\.?|note\b|important|attention|⚠️|🚨|❗)/i.test(l);
+  const isBullet = (l: string) => /^[-•*–]\s+/.test(l);
+  const isNumbered = (l: string) => /^\d+[.)]\s+/.test(l);
+
+  return (
+    <div className="space-y-2">
+      {lines.map((line, i) => {
+        if (isWarning(line)) {
+          return (
+            <p
+              key={i}
+              className={`${textSize} font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border-l-4 border-red-500 rounded-r-lg px-3 py-2 text-safe`}
+            >
+              {line}
+            </p>
+          );
+        }
+        if (isBullet(line)) {
+          return (
+            <p key={i} className={`${textSize} flex gap-2 text-safe`}>
+              <span className="text-purple-500 font-bold leading-6">•</span>
+              <span className="flex-1">{line.replace(/^[-•*–]\s+/, "")}</span>
+            </p>
+          );
+        }
+        if (isNumbered(line)) {
+          const m = line.match(/^(\d+)[.)]\s+(.*)$/);
+          if (m) {
+            return (
+              <p key={i} className={`${textSize} flex gap-2 items-start text-safe`}>
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-300 text-[11px] font-bold flex items-center justify-center mt-0.5">
+                  {m[1]}
+                </span>
+                <span className="flex-1">{m[2]}</span>
+              </p>
+            );
+          }
+        }
+        return (
+          <p key={i} className={`${textSize} text-safe`}>
+            {line}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================
+// Carte « code promo » (1xBet, BetWinner, 1Win…) :
+// le code est affiché en grand, copiable en 1 clic, avec le bonus
+// et un bouton d'inscription. Plus besoin de rédiger le message.
+// ============================================================
+function PromoCodeCard({
+  promo,
+  copied,
+  onCopy,
+}: {
+  promo: { siteName: string; siteEmoji: string; code: string; bonusLabel: string; link: string };
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="mt-3 rounded-2xl border-2 border-amber-300 dark:border-amber-500/40 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 font-semibold text-sm">
+          <span className="text-lg">{promo.siteEmoji}</span> {promo.siteName}
+        </span>
+        {promo.bonusLabel && (
+          <span className="text-[11px] font-bold px-2 py-1 rounded-full bg-amber-500 text-white whitespace-nowrap">
+            {promo.bonusLabel}
+          </span>
+        )}
+      </div>
+
+      <button
+        onClick={onCopy}
+        className="w-full flex items-center justify-between gap-2 rounded-xl bg-white dark:bg-black/30 border border-dashed border-amber-400 px-3 py-3 active:scale-[0.99] transition-transform"
+      >
+        <span className="text-base font-mono font-bold tracking-widest text-amber-700 dark:text-amber-300 break-all text-left">
+          {promo.code}
+        </span>
+        <span className="flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300 whitespace-nowrap">
+          {copied ? (
+            <>
+              <Check className="w-3 h-3" /> Copié !
+            </>
+          ) : (
+            <>
+              <Copy className="w-3 h-3" /> Copier
+            </>
+          )}
+        </span>
+      </button>
+
+      {promo.link && (
+        <a
+          href={promo.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-3 py-2.5"
+        >
+          <ExternalLink className="w-4 h-4" /> S&apos;inscrire sur {promo.siteName}
+        </a>
+      )}
+    </div>
+  );
+}
 
 interface TaskField {
   id: string;
@@ -42,6 +168,9 @@ export default function TasksPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Code promo copié (feedback visuel) + popup « Instructions »
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [instructionsModal, setInstructionsModal] = useState<string | null>(null);
 
   // Also check localStorage directly for plan slug
   const localPlanSlug = typeof window !== "undefined" ? localStorage.getItem("rewardly_plan_slug") : null;
@@ -83,6 +212,7 @@ export default function TasksPage() {
     step: "share" | "watch" | "complete";
     videoWatched: boolean;
     imageViewed: boolean;
+    validationType: "auto" | "manual";
   } | null>(null);
 
   // Parse [MEDIA] info from task instructions (image/video)
@@ -97,6 +227,27 @@ export default function TasksPage() {
     };
   };
 
+  // ===== Codes promo / parrainage : décodage via la lib partagée =====
+  // (mêmes helpers que le formulaire admin → aucune divergence possible)
+  const parsePromoInfo = (task: any) => parsePromoFromInstructions(task?.instructions);
+  const cleanAllMarkers = cleanTaskInstructions;
+
+  // Copie un texte (code promo) avec retour visuel + repli si l'API n'existe pas
+  const copyText = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = value;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopiedCode(value);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
   // Video completion state
   const [videoWatched, setVideoWatched] = useState<Record<string, boolean>>({});
   const [videoTaskId, setVideoTaskId] = useState<string | null>(null);
@@ -107,23 +258,24 @@ export default function TasksPage() {
   const { hideNav, showNav } = useNav();
 
   useEffect(() => {
-    if (showTaskModal || shareModalOpen) {
+    if (showTaskModal || shareModalOpen || instructionsModal) {
       hideNav(true);
     } else {
       showNav();
     }
-  }, [showTaskModal, shareModalOpen, hideNav, showNav]);
+  }, [showTaskModal, shareModalOpen, instructionsModal, hideNav, showNav]);
 
   // Parse [SHARE] info from task instructions
+  // (tolérant : l'admin peut laisser l'app ou le nombre vides → valeurs par défaut)
   const parseShareInfo = (task: any) => {
     const instructions = task.instructions || "";
-    const match = instructions.match(/\[SHARE\] app=(\w+) target=(\w+) count=(\d+)/);
+    const match = instructions.match(/\[SHARE\]\s*app=(\w*)\s*target=(\w*)\s*count=(\d*)/);
     if (!match) return null;
     return {
-      app: match[1],
-      target: match[2],
-      count: parseInt(match[3], 10) || 1,
-      cleanInstructions: instructions.replace(/\[SHARE\] app=\w+ target=\w+ count=\d+\n?/, ""),
+      app: match[1] || "whatsapp",
+      target: match[2] || "contacts",
+      count: parseInt(match[3], 10) > 0 ? parseInt(match[3], 10) : 1,
+      cleanInstructions: instructions.replace(/\[SHARE\]\s*app=\w*\s*target=\w*\s*count=\d*\n?/, ""),
     };
   };
 
@@ -132,11 +284,6 @@ export default function TasksPage() {
     const info = parseShareInfo(task);
     if (!info) return;
     const media = parseMediaInfo(task);
-    // Nettoyer les instructions : retirer [SHARE] ET [MEDIA]
-    const cleanInstructions = (task.instructions || "")
-      .replace(/\[SHARE\] app=\w+ target=\w+ count=\d+\n?/g, "")
-      .replace(/\[MEDIA\] type=\w+ data=data:[^\s]+\n?/g, "")
-      .trim();
     setShareModal({
       open: true,
       taskId: task.id,
@@ -149,10 +296,11 @@ export default function TasksPage() {
       target: info.target,
       targetCount: info.count,
       shareCount: 0,
-      instructions: cleanInstructions,
+      instructions: cleanAllMarkers(task.instructions),
       step: "share",
       videoWatched: false,
       imageViewed: false,
+      validationType: task.validation_type === "manual" ? "manual" : "auto",
     });
   };
 
@@ -168,11 +316,20 @@ export default function TasksPage() {
   const incrementShare = () => {
     if (!shareModal) return;
     const newCount = shareModal.shareCount + 1;
-    setShareModal({ ...shareModal, shareCount: newCount });
-    // If target reached, move to "watch" step (must watch media before validating)
     if (newCount >= shareModal.targetCount) {
-      setShareModal({ ...shareModal, shareCount: newCount, step: "watch" });
+      // 🩹 Pas de média → on ne demande PAS de "regarder une vidéo"
+      // (sinon l'utilisateur était bloqué sur un bouton désactivé).
+      const hasMedia = Boolean(shareModal.mediaData);
+      setShareModal({
+        ...shareModal,
+        shareCount: newCount,
+        step: hasMedia ? "watch" : "complete",
+        videoWatched: !hasMedia,
+        imageViewed: !hasMedia,
+      });
+      return;
     }
+    setShareModal({ ...shareModal, shareCount: newCount });
   };
 
   // Convert a base64 data URL to a File for sharing (image/video)
@@ -528,10 +685,49 @@ export default function TasksPage() {
                           {task.validation_type === "auto" ? "Auto" : "Manuel"}
                         </span>
                       </div>
+                      {(() => {
+                        // ===== CODE PROMO (1xBet, BetWinner, 1Win…) =====
+                        const promo = parsePromoInfo(task);
+                        if (!promo) return null;
+                        const isManual = task.validation_type === "manual";
+                        return (
+                          <div className="space-y-2">
+                            <PromoCodeCard
+                              promo={promo}
+                              copied={copiedCode === promo.code}
+                              onCopy={() => copyText(promo.code)}
+                            />
+                            {isManual ? (
+                              <Button size="sm" variant="outline" className="w-full" onClick={() => openTaskModal(task.id)}>
+                                <Upload className="w-3 h-3 mr-1" /> Soumettre ma preuve d&apos;inscription
+                              </Button>
+                            ) : confirmingId === task.id ? (
+                              <Button
+                                size="sm"
+                                className="w-full bg-green-500 hover:bg-green-600"
+                                disabled={completingId === task.id}
+                                onClick={() => handleComplete(task.id, task.amount, task.title)}
+                              >
+                                {completingId === task.id ? (
+                                  <><Sparkles className="w-3 h-3 mr-1 animate-spin" /> Paiement en cours...</>
+                                ) : (
+                                  <><Check className="w-3 h-3 mr-1" /> J&apos;ai utilisé le code — {formatCurrency(task.amount)} crédité</>
+                                )}
+                              </Button>
+                            ) : (
+                              <Button size="sm" className="w-full" onClick={() => setConfirmingId(task.id)}>
+                                <Ticket className="w-3 h-3 mr-1" /> J&apos;ai utilisé le code promo
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {parseMediaInfo(task) ? (() => {
                         const media = parseMediaInfo(task);
-                        // Si la tâche a AUSSI un partage [SHARE], on affiche SEULEMENT "Partager"
-                        // L'utilisateur doit passer par la modal (partage → regarder → valider)
+                        // Média + partage : on montre le média ET le bouton de partage.
+                        // Si la validation est manuelle, la preuve est demandée à la
+                        // fin du partage (voir la modal de partage).
                         const hasShare = parseShareInfo(task);
                         if (hasShare) {
                           return (
@@ -546,7 +742,10 @@ export default function TasksPage() {
                                 />
                               )}
                               <Button size="sm" className="w-full bg-purple-500 hover:bg-purple-600" onClick={() => openShareModal(task)}>
-                                <Share2 className="w-3 h-3 mr-1" /> Partager et gagner {formatCurrency(task.amount)}
+                                <Share2 className="w-3 h-3 mr-1" />
+                                {task.validation_type === "manual"
+                                  ? "Partager puis soumettre la preuve"
+                                  : `Partager et gagner ${formatCurrency(task.amount)}`}
                               </Button>
                             </div>
                           );
@@ -563,7 +762,13 @@ export default function TasksPage() {
                                 onEnded={() => setVideoWatched((prev) => ({ ...prev, [task.id]: true }))}
                               />
                             )}
-                            {media?.type === "video" ? (
+                            {task.validation_type === "manual" ? (
+                              // Validation manuelle : l'utilisateur envoie sa preuve
+                              // (capture d'écran, lien…) au lieu d'être crédité direct.
+                              <Button size="sm" className="w-full" variant="outline" onClick={() => openTaskModal(task.id)}>
+                                <Upload className="w-3 h-3 mr-1" /> Soumettre ma preuve
+                              </Button>
+                            ) : media?.type === "video" ? (
                               videoWatched[task.id] ? (
                                 <Button size="sm" className="w-full bg-green-500 hover:bg-green-600" onClick={() => handleComplete(task.id, task.amount, task.title)}>
                                   <Check className="w-3 h-3 mr-1" /> J'ai regardé — {formatCurrency(task.amount)} crédité
@@ -581,13 +786,14 @@ export default function TasksPage() {
                           </div>
                         );
                       })() : parseShareInfo(task) ? (
-                        // Share task: open share modal with progress
+                        // Tâche de partage : ouvre la modal de progression
                         <Button
                           size="sm"
                           className="mt-3 w-full bg-green-500 hover:bg-green-600"
                           onClick={() => openShareModal(task)}
                         >
-                          <Share2 className="w-3 h-3 mr-1" /> Partager
+                          <Share2 className="w-3 h-3 mr-1" />
+                          {task.validation_type === "manual" ? "Partager puis soumettre la preuve" : "Partager"}
                         </Button>
                       ) : task.validation_type === "manual" ? (
                         <Button
@@ -645,6 +851,16 @@ export default function TasksPage() {
                             <><Sparkles className="w-3 h-3 mr-1" /> Accomplir +{formatCurrency(task.amount)}</>
                           )}
                         </Button>
+                      )}
+
+                      {/* Bouton « Instructions » : affichage coloré (NB en rouge) */}
+                      {cleanAllMarkers(task.instructions) && (
+                        <button
+                          onClick={() => setInstructionsModal(task.id)}
+                          className="mt-2 w-full flex items-center justify-center gap-2 text-xs font-semibold text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-500/10 hover:bg-purple-100 dark:hover:bg-purple-500/20 rounded-xl py-2.5 transition-colors"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" /> Voir les instructions
+                        </button>
                       )}
                     </div>
                   </div>
@@ -799,6 +1015,16 @@ export default function TasksPage() {
                       <Eye className="w-4 h-4 mr-2" /> Cliquez sur l'image pour la voir en grand
                     </Button>
                   )
+                ) : !shareModal.mediaData ? (
+                  // 🩹 Aucun média n'a été ajouté à cette tâche : on ne demande
+                  // surtout PAS de « regarder une vidéo » (bouton bloquant avant).
+                  <Button
+                    className="w-full bg-green-500 hover:bg-green-600"
+                    size="lg"
+                    onClick={() => setShareModal({ ...shareModal, step: "complete" })}
+                  >
+                    <ArrowRight className="w-4 h-4 mr-2" /> Continuer
+                  </Button>
                 ) : shareModal.videoWatched ? (
                   <Button
                     className="w-full bg-green-500 hover:bg-green-600"
@@ -820,9 +1046,13 @@ export default function TasksPage() {
               <>
                 <div className="bg-green-50 dark:bg-green-500/10 rounded-xl p-4 mb-4 text-center">
                   <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-2" />
-                  <h3 className="font-semibold">Tout est validé !</h3>
+                  <h3 className="font-semibold">
+                    {shareModal.validationType === "manual" ? "Partage terminé !" : "Tout est validé !"}
+                  </h3>
                   <p className="text-sm text-[#8A8A8A] mt-1">
-                    Vous avez partagé et regardé le contenu. Vous pouvez maintenant toucher votre commission.
+                    {shareModal.validationType === "manual"
+                      ? "Envoyez maintenant votre preuve : un administrateur validera votre gain."
+                      : "Vous avez partagé et regardé le contenu. Vous pouvez maintenant toucher votre commission."}
                   </p>
                   <p className="text-2xl font-bold text-green-500 mt-3">+{formatCurrency(shareModal.amount)}</p>
                 </div>
@@ -830,11 +1060,23 @@ export default function TasksPage() {
                   className="w-full bg-green-500 hover:bg-green-600"
                   size="lg"
                   onClick={() => {
+                    // Validation manuelle : on enchaîne sur le FORMULAIRE de preuve
+                    // (champs définis par l'admin) au lieu de créditer d'office.
+                    if (shareModal.validationType === "manual") {
+                      const taskId = shareModal.taskId;
+                      setShareModal(null);
+                      openTaskModal(taskId);
+                      return;
+                    }
                     handleComplete(shareModal.taskId, shareModal.amount, shareModal.title);
                     setShareModal(null);
                   }}
                 >
-                  <Sparkles className="w-4 h-4 mr-2" /> Valider et toucher ma commission
+                  {shareModal.validationType === "manual" ? (
+                    <><Upload className="w-4 h-4 mr-2" /> Soumettre ma preuve</>
+                  ) : (
+                    <><Sparkles className="w-4 h-4 mr-2" /> Valider et toucher ma commission</>
+                  )}
                 </Button>
               </>
             )}
@@ -872,8 +1114,10 @@ export default function TasksPage() {
                         )}
                       </div>
                     </div>
-                    {task.instructions && (
-                      <p className="text-sm mt-3 bg-white dark:bg-white/5 p-3 rounded-lg text-safe max-h-40 overflow-y-auto">{task.instructions}</p>
+                    {cleanAllMarkers(task.instructions) && (
+                      <div className="mt-3 bg-white dark:bg-white/5 p-3 rounded-lg max-h-48 overflow-y-auto">
+                        <InstructionsBlock text={cleanAllMarkers(task.instructions)} size="xs" />
+                      </div>
                     )}
                     {task.link && (
                       <a href={normalizeUrl(task.link)} target="_blank" rel="noopener noreferrer" className="text-sm text-purple-500 flex items-center gap-1 mt-2">
@@ -971,6 +1215,55 @@ export default function TasksPage() {
           </motion.div>
         </div>
       )}
+
+      {/* Popup « Instructions » : texte structuré et COLORÉ (NB / ⚠️ en rouge) */}
+      {instructionsModal &&
+        (() => {
+          const task = allTasks.find((t) => t.id === instructionsModal);
+          if (!task) return null;
+          const text = cleanAllMarkers(task.instructions);
+          return (
+            <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-lg bg-white dark:bg-[#161616] rounded-t-3xl sm:rounded-3xl p-6 max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold flex items-center gap-2">
+                    <BookOpen className="w-5 h-5 text-purple-500" /> Instructions
+                  </h2>
+                  <button
+                    onClick={() => setInstructionsModal(null)}
+                    className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="mb-4 rounded-xl bg-purple-50 dark:bg-purple-500/10 p-3">
+                  <p className="font-semibold text-sm">
+                    {task.icon || "📋"} {task.title}
+                  </p>
+                  <p className="text-xs text-[#8A8A8A] mt-1">
+                    +{formatCurrency(task.amount)} •{" "}
+                    {task.validation_type === "auto" ? "Crédit automatique" : "Validation manuelle"}
+                  </p>
+                </div>
+
+                {text ? (
+                  <InstructionsBlock text={text} />
+                ) : (
+                  <p className="text-sm text-[#8A8A8A]">Aucune instruction pour cette tâche.</p>
+                )}
+
+                <Button className="w-full mt-5" variant="outline" size="lg" onClick={() => setInstructionsModal(null)}>
+                  J&apos;ai compris
+                </Button>
+              </motion.div>
+            </div>
+          );
+        })()}
     </div>
   );
 }
