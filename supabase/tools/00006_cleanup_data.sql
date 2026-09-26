@@ -1,3 +1,12 @@
+-- ============================================================
+-- ⚠️  DANGER — SCRIPT HISTORIQUE DE NETTOYAGE (NE PAS EXÉCUTER)
+-- ============================================================
+-- Ce script SUPPRIME TOUTES les données utilisateur :
+--   profils, portefeuilles, transactions, dépôts, retraits, tâches…
+-- Il a servi une seule fois pendant le développement.
+-- ⛔ Il n'est PLUS inclus dans supabase/INSTALL.sql (garde-fou du générateur).
+-- À n'exécuter que sur une base de TEST, en connaissance de cause.
+-- ============================================================
 -- Rewardly Cleanup Data
 -- Migration 00006: Clean all existing demo/system data
 -- Requirement: "efface les données des comptes existants et supprime les comptes"

@@ -1,3 +1,12 @@
+-- ============================================================
+-- ⚠️  DANGER — SCRIPT HISTORIQUE DE NETTOYAGE (NE PAS EXÉCUTER)
+-- ============================================================
+-- Ce script SUPPRIME TOUTES les données utilisateur :
+--   profils, portefeuilles, transactions, dépôts, retraits, tâches…
+-- Il a servi une seule fois pendant le développement.
+-- ⛔ Il n'est PLUS inclus dans supabase/INSTALL.sql (garde-fou du générateur).
+-- À n'exécuter que sur une base de TEST, en connaissance de cause.
+-- ============================================================
 -- Rewardly Cleanup + Admin Role
 -- Migration 00007: Clean all data and set admin role for wlagbema@gmail.com
 
