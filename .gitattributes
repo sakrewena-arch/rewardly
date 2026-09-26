@@ -1,0 +1,6 @@
+# Normalisation des fins de ligne.
+# Les fichiers SQL de supabase/setup/ sont GÉNÉRÉS avec des LF : ils doivent
+# rester en LF pour que `npm run db:check` produise le même résultat sur
+# Windows et dans la CI (Linux).
+*.sql text eol=lf
+*.mjs text eol=lf
