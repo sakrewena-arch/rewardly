@@ -28,7 +28,7 @@ jobs:
       - name: TypeScript typecheck
         run: npx tsc --noEmit
 
-      - name: Vérifier le SQL canonique (supabase/setup)
+      - name: Vérifier supabase/INSTALL.sql (fichier SQL unique)
         run: npm run db:check
 
   test:

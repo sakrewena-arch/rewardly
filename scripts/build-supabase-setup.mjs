@@ -1,28 +1,33 @@
 /**
  * ============================================================
- * REWARDLY — Générateur de l'ensemble SQL canonique
+ * REWARDLY — Générateur du fichier SQL UNIQUE
  * ============================================================
- * Lit les sources CANONIQUES, dans l'ordre d'application :
- *   1. supabase/legacy/consolidated_schema.sql      (base : tables, RLS, seed)
- *   2. supabase/migrations/00001..000NN_*.sql       (correctifs, ordre croissant)
+ * Lit les sources (matière première, jamais exécutées telles quelles) :
+ *   1. supabase/sources/base_schema.sql            (tables, RLS, seed, storage)
+ *   2. supabase/sources/migrations/00001..00022    (correctifs, ordre croissant)
  *
- * et écrit dans supabase/setup/ :
- *   01_schema.sql        tables, index, types, seeds, storage
- *   02_functions.sql     TOUTES les fonctions (dernière version gagnante)
- *   03_rls_triggers.sql  triggers + policies (dernière version gagnante)
- *   04_privileges.sql    GRANT/REVOKE + durcissement anti auto-crédit
- *   00_full_setup.sql    concaténation des 4 (fichier unique à coller)
+ * et écrit UN SEUL fichier à exécuter dans le SQL Editor Supabase :
+ *   supabase/INSTALL.sql
+ *     §1 schéma (tables, index, types, seeds, storage)
+ *     §2 fonctions  (34, dernière version gagnante, idempotentes)
+ *     §3 triggers + policies RLS
+ *     §4 privilèges (GRANT/REVOKE + durcissement anti accès anonyme)
  *
  * Règles :
  *   - « dernière définition gagnante » : une fonction/un trigger/une policy
- *     défini plusieurs fois n'est conservé qu'une fois (la version la plus
- *     récente selon l'ordre ci-dessus) -> état final = celui de la prod.
- *   - Les fichiers supabase/legacy/** et supabase/tools/** ne sont JAMAIS
- *     appliqués (historique / exploitation).
+ *     défini plusieurs fois n'est conservé qu'une fois (version la plus
+ *     récente selon l'ordre ci-dessus) -> état final = celui attendu en prod.
+ *   - Les RPC AVEC paramètres sont précédées d'un DROP FUNCTION IF EXISTS :
+ *     évite l'erreur « cannot change name of input parameter » quand la
+ *     fonction existe déjà avec d'autres noms de paramètres.
  *   - Les RPC d'administration reçoivent une garde is_admin()/is_staff() si
  *     elle manque, et sont retirées de l'accès anonyme (anon/PUBLIC).
+ *   - Un VALIDATEUR vérifie ensuite que chaque référence (policy/trigger/
+ *     index/GRANT) pointe bien sur un objet défini dans le fichier.
  *
- * Usage :  node scripts/build-supabase-setup.mjs
+ * Usage :
+ *   node scripts/build-supabase-setup.mjs           # génère INSTALL.sql
+ *   node scripts/build-supabase-setup.mjs --check   # vérifie (CI)
  * ============================================================
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
@@ -31,19 +36,23 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SUPABASE = join(ROOT, "supabase");
-const OUT_DIR = join(SUPABASE, "setup");
+const SOURCES_DIR = join(SUPABASE, "sources");
+const OUT_FILE = join(SUPABASE, "INSTALL.sql");
 const rel = (p) => relative(ROOT, p).replace(/\\/g, "/");
 
 // ------------------------------------------------------------
-// 1. Sources canoniques (ordre d'application)
+// 1. Sources (ordre d'application)
 // ------------------------------------------------------------
-const MIGRATIONS = readdirSync(join(SUPABASE, "migrations"))
-  .filter((f) => /^\d+_.*\.sql$/.test(f))
-  .sort();
+const MIGRATIONS_DIR = join(SOURCES_DIR, "migrations");
+const MIGRATIONS = existsSync(MIGRATIONS_DIR)
+  ? readdirSync(MIGRATIONS_DIR)
+      .filter((f) => /^\d+_.*\.sql$/.test(f))
+      .sort()
+  : [];
 
 const SOURCES = [
-  join(SUPABASE, "legacy", "consolidated_schema.sql"),
-  ...MIGRATIONS.map((f) => join(SUPABASE, "migrations", f)),
+  join(SOURCES_DIR, "base_schema.sql"),
+  ...MIGRATIONS.map((f) => join(MIGRATIONS_DIR, f)),
 ].filter((f) => existsSync(f));
 
 // RPC d'administration : garde obligatoire + retrait de l'accès anonyme
@@ -335,20 +344,14 @@ for (const name of NO_ANON) {
 // ------------------------------------------------------------
 // 6. Écriture
 // ------------------------------------------------------------
-mkdirSync(OUT_DIR, { recursive: true });
+mkdirSync(SUPABASE, { recursive: true });
 
-const banner = (step, title, note) =>
-  [
-    "-- " + "=".repeat(70),
-    `-- REWARDLY — ${title}   (étape ${step}/4)`,
-    "-- GÉNÉRÉ par scripts/build-supabase-setup.mjs — NE PAS ÉDITER À LA MAIN.",
-    "-- Modifier supabase/migrations/, puis régénérer.",
-    note ? `-- ${note}` : null,
-    "-- " + "=".repeat(70),
-    "",
-  ]
-    .filter((l) => l !== null)
-    .join("\n");
+// Anti-erreur « cannot change name of input parameter » : les RPC AVEC
+// paramètres sont supprimées avant recréation (aucune policy RLS ne dépend
+// d'une RPC — contrairement aux helpers sans argument, laissés en REPLACE).
+const fnDrops = [...functions.entries()]
+  .filter(([, f]) => typesSig(stripLeadingComments(f.stmt)) !== "")
+  .map(([name, f]) => `DROP FUNCTION IF EXISTS public.${name}(${typesSig(stripLeadingComments(f.stmt))});`);
 
 const schemaBody = schemaStmts
   .map((s) => `-- [${s.file}:${s.line}]\n${sanitizeComments(s.stmt)}`)
@@ -368,63 +371,164 @@ const polBody = [...policies.entries()]
 const privBody = privileges.map((p) => `-- [${p.file}:${p.line}]\n${sanitizeComments(p.stmt)}`).join("\n\n");
 
 const out = {
-  "01_schema.sql":
-    banner(1, "SCHÉMA — extensions, types, tables, index, seeds, storage", "À exécuter en premier (idempotent).") +
-    "\n" +
-    schemaBody +
-    "\n",
-  "02_functions.sql":
-    banner(2, `FONCTIONS — ${functions.size} fonctions (état final dédupliqué)`, "Dernière version de chaque fonction selon l'ordre des migrations.") +
-    "\n" +
-    fnBody +
-    "\n",
-  "03_rls_triggers.sql":
-    banner(3, `TRIGGERS (${triggers.size}) + RLS POLICIES (${policies.size})`, "Chaque objet est supprimé puis recréé : idempotent.") +
-    "\n" +
-    trigBody +
-    "\n\n" +
-    polBody +
-    "\n",
-  "04_privileges.sql":
-    banner(4, "PRIVILÈGES — GRANT/REVOKE + durcissement", "Les RPC d'administration ne sont plus accessibles aux clients anonymes.") +
-    "\n" +
-    privBody +
-    "\n\n" +
-    "-- ======================================================\n" +
-    "-- DURCISSEMENT (généré) : accès ANONYME interdit\n" +
-    "-- ======================================================\n" +
-    hardening.join("\n") +
-    "\n",
+  "§1 — SCHÉMA (tables, index, types, seeds, stockage)": schemaBody,
+  [`§2 — FONCTIONS (${functions.size})`]: `${fnDrops.join("\n")}\n\n${fnBody}`,
+  [`§3 — TRIGGERS (${triggers.size}) + RLS (${policies.size} policies)`]: `${trigBody}\n\n${polBody}`,
+  "§4 — PRIVILÈGES (GRANT/REVOKE + durcissement)": `${privBody}\n\n${hardening.join("\n")}`,
 };
 
-const fullContent =
-  banner(0, "INSTALLATION / MISE À JOUR COMPLÈTE (fichier unique)", "Copier-coller intégral dans le SQL Editor Supabase.") +
-  "\n\n" +
-  Object.entries(out)
-    .map(([name, content]) => `-- ~~~~ INCLUS : ${name} ~~~~\n\n${content}`)
-    .join("\n\n");
+const toc = Object.keys(out)
+  .map((t) => `--   • ${t}`)
+  .join("\n");
 
-const allFiles = { ...out, "00_full_setup.sql": fullContent };
+const installContent = [
+  "/*",
+  " * " + "=".repeat(74),
+  " * REWARDLY — INSTALLATION / MISE À JOUR COMPLÈTE DE LA BASE DE DONNÉES",
+  " * " + "=".repeat(74),
+  " *",
+  " * ⭐ FICHIER UNIQUE À EXÉCUTER :",
+  " *      Supabase → SQL Editor → coller TOUT ce fichier → Run",
+  " *",
+  " * ✅ Idempotent : peut être exécuté plusieurs fois, sans erreur et",
+  " *    sans perte de données (CREATE IF NOT EXISTS / DROP IF EXISTS /\n *    CREATE OR REPLACE / DROP FUNCTION puis CREATE pour les RPC).",
+  " *",
+  " * Contenu :",
+  toc,
+  " *",
+  " * ⚠️ NE PAS ÉDITER À LA MAIN : ce fichier est GÉNÉRÉ par",
+  " *    scripts/build-supabase-setup.mjs à partir de supabase/sources/",
+  " *    (modifier une migration dans supabase/sources/migrations/, puis",
+  " *     exécuter : npm run db:build).",
+  " *",
+  " * " + "=".repeat(74),
+  " */",
+  "",
+  ...Object.entries(out).map(([title, body]) =>
+    [
+      "",
+      "/* " + "=".repeat(70),
+      " * " + title,
+      " * " + "=".repeat(70) + " */",
+      "",
+      body,
+    ].join("\n")
+  ),
+  "",
+].join("\n").replace(/\r\n/g, "\n"); // toujours en LF (identique sur Windows et Linux)
 
-// Mode --check : vérifie que les fichiers générés sont à jour (CI)
+// ------------------------------------------------------------
+// 7. VALIDATION — toute référence doit pointer sur un objet défini
+//    (attrape les erreurs d'exécution les plus fréquentes : policy ou
+//     trigger sur une table inexistante, GRANT sur une fonction absente
+//     ou avec une signature qui ne correspond pas…)
+// ------------------------------------------------------------
+const normType = (t) =>
+  t
+    .toLowerCase()
+    .replace(/\bdecimal\b/g, "numeric")
+    .replace(/\bint\b|\bint4\b/g, "integer")
+    .replace(/\bbool\b/g, "boolean")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const SYSTEM_OBJECTS = new Set([
+  "auth.users",
+  "auth.sessions",
+  "auth.refresh_tokens",
+  "auth.identities",
+  "storage.objects",
+  "storage.buckets",
+]);
+
+const definedTables = new Set();
+for (const s of schemaStmts) {
+  const h = stripLeadingComments(s.stmt);
+  for (const m of h.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w".]+)/gi)) {
+    const full = m[1].toLowerCase().replace(/"/g, "").replace(/;$/, "");
+    definedTables.add(full.includes(".") ? full : `public.${full}`);
+  }
+}
+
+const fnByName = new Map([...functions.entries()].map(([k, v]) => [k.toLowerCase(), v]));
+const problems = [];
+
+const tableOfStmt = (stmt) => {
+  const h = stripLeadingComments(stmt);
+  let m = null;
+  if (/^INSERT\s+INTO/i.test(h)) {
+    m = /\bINSERT\s+INTO\s+([\w".]+)/i.exec(h);
+  } else if (/^ALTER\s+TABLE/i.test(h)) {
+    m = /\bALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?([\w".]+)/i.exec(h);
+  } else {
+    m = /\bON\s+(?:TABLE\s+)?([\w".]+)/i.exec(h);
+    // ignore ON CONFLICT / ON UPDATE / ON DELETE (clauses, pas des tables)
+    if (m && /^(conflict|update|delete|commit|rollback)$/i.test(m[1])) m = null;
+  }
+  if (!m) return null;
+  const raw = m[1].toLowerCase().replace(/"/g, "").replace(/;$/, "");
+  return raw.includes(".") ? raw : `public.${raw}`;
+};
+
+const checkTableRef = (stmt, label) => {
+  const t = tableOfStmt(stmt);
+  if (!t) return;
+  if (!definedTables.has(t) && !SYSTEM_OBJECTS.has(t)) {
+    problems.push(`${label} → table « ${t} » non définie dans le fichier`);
+  }
+};
+
+for (const [name, p] of policies) checkTableRef(p.stmt, `POLICY "${name}"`);
+for (const [name, t] of triggers) checkTableRef(t.stmt, `TRIGGER ${name}`);
+for (const s of schemaStmts) {
+  const h = stripLeadingComments(s.stmt);
+  if (/^(ALTER\s+TABLE|CREATE\s+(?:UNIQUE\s+)?INDEX|INSERT\s+INTO)/i.test(h)) {
+    checkTableRef(s.stmt, `${h.split(/\s+/).slice(0, 3).join(" ")} (${s.file}:${s.line})`);
+  }
+}
+
+for (const p of privileges) {
+  const m = /ON\s+FUNCTION\s+(?:public\.)?([a-z_0-9]+)\s*\(([^)]*)\)/i.exec(stripLeadingComments(p.stmt));
+  if (!m) continue;
+  const name = m[1].toLowerCase();
+  const fn = fnByName.get(name);
+  if (!fn) {
+    problems.push(`PRIVILÈGE (${p.file}:${p.line}) → fonction « ${name} » non définie`);
+    continue;
+  }
+  const want = normType(m[2]);
+  const have = normType(typesSig(stripLeadingComments(fn.stmt)));
+  if (want !== have) {
+    problems.push(
+      `PRIVILÈGE (${p.file}:${p.line}) → ${name}(${want}) ≠ définition ${name}(${have})`
+    );
+  }
+}
+
+if (problems.length) {
+  console.error(`\n✗ ${problems.length} référence(s) invalide(s) :`);
+  problems.slice(0, 30).forEach((p) => console.error(`   - ${p}`));
+  console.error("  → corrigez les sources puis relancez.");
+  process.exit(1);
+}
+
+const allFiles = { "INSTALL.sql": installContent };
+
+// Mode --check : vérifie que le fichier généré est à jour (utilisé en CI)
 if (process.argv.includes("--check")) {
-  const drifted = Object.entries(allFiles).filter(([name, content]) => {
-    const p = join(OUT_DIR, name);
-    return !existsSync(p) || readFileSync(p, "utf8") !== content;
+  const drifted = Object.entries(allFiles).filter(([, content]) => {
+    return !existsSync(OUT_FILE) || readFileSync(OUT_FILE, "utf8") !== content;
   });
   if (drifted.length) {
-    console.error("✗ Fichiers supabase/setup/ désynchronisés :");
-    drifted.forEach(([name]) => console.error(`   - ${name}`));
+    console.error("✗ supabase/INSTALL.sql n'est pas à jour.");
     console.error("  → corrigez avec : node scripts/build-supabase-setup.mjs");
     process.exit(1);
   }
-  console.log("✓ supabase/setup/ est à jour par rapport aux migrations.");
+  console.log("✓ supabase/INSTALL.sql est à jour par rapport aux sources.");
   process.exit(0);
 }
 
-for (const [name, content] of Object.entries(allFiles)) {
-  writeFileSync(join(OUT_DIR, name), content, "utf8");
-}
+writeFileSync(OUT_FILE, installContent, "utf8");
 
 // ------------------------------------------------------------
 // 7. Rapport
@@ -436,13 +540,16 @@ const guardOk = [...functions.entries()].filter(
 console.log("Sources appliquées (ordre) :");
 SOURCES.forEach((f, i) => console.log(`  ${i + 1}. ${rel(f)}`));
 console.log("");
+console.log(`→ Fichier généré : ${rel(OUT_FILE)}`);
 console.log(`Fonctions           : ${functions.size}  (définitions ignorées : ${dropped.functions})`);
 console.log(`Triggers            : ${triggers.size}  (ignorés : ${dropped.triggers})`);
 console.log(`Policies RLS        : ${policies.size}  (ignorées : ${dropped.policies})`);
 console.log(`GRANT/REVOKE        : ${privileges.length}  (doublons ignorés : ${dropped.privileges})`);
 console.log(`Instructions schéma : ${schemaStmts.length}  (doublons ignorés : ${dropped.schema})`);
 console.log(`Gardes admin        : ${guardOk.length}/${ADMIN_RPCS.length}`);
+console.log(`DROP FUNCTION (RPC) : ${fnDrops.length}`);
 console.log(`REVOKE de durcissement : ${hardening.length}`);
+console.log(`Références validées : OK (tables, fonctions, signatures)`);
 if (dropFunctionStmts.length) {
   console.log("");
   console.log("⚠ DROP FUNCTION explicites trouvés (à vérifier) :");

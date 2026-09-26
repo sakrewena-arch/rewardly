@@ -1,69 +1,75 @@
-# 🗄️ Base de données Rewardly — organisation du SQL
+# 🗄️ Base de données Rewardly — mode d'emploi
 
-## ⚡ À exécuter (le seul chemin officiel)
+## ⚡ UN SEUL FICHIER À EXÉCUTER
 
-| Ordre | Fichier | Contenu |
-|---|---|---|
-| **1** | [`setup/00_full_setup.sql`](./setup/00_full_setup.sql) | **Tout en un seul fichier** (recommandé : copier-coller dans le SQL Editor) |
-| ou | `setup/01_schema.sql` | extensions, types, **tables**, index, seeds, storage |
-| | `setup/02_functions.sql` | **34 fonctions** (état final dédupliqué) |
-| | `setup/03_rls_triggers.sql` | triggers + **policies RLS** |
-| | `setup/04_privileges.sql` | `GRANT`/`REVOKE` + durcissement anti auto-crédit |
+➡️ **[`INSTALL.sql`](./INSTALL.sql)**
 
-> ✅ **Tout est idempotent** : ces fichiers peuvent être exécutés plusieurs fois sans erreur.
-> Ils sont **générés** : `npm run db:build` (voir « Régénérer » plus bas).
-
-## 📁 Rôle de chaque dossier
-
-| Dossier | Rôle | À exécuter ? |
-|---|---|---|
-| `setup/` | **État canonique** de la base (source d'exécution) | ✅ **oui** |
-| `migrations/` | Historique des correctifs (`00001` → `00022`), déjà appliqués en prod | ❌ non (référence) |
-| `legacy/` | Anciens fichiers non canoniques (`consolidated_schema.sql`, `dbg/*`, doublon `security_fixes.sql`) | ❌ **jamais** |
-| `tools/` | Scripts d'exploitation (reset, test de charge, injection) | ⚠️ **manuel & dangereux** |
-| `functions/` | Edge Functions Deno (déployées via `supabase functions deploy`) | — |
-
-## 🧠 Règles de fonctionnement (à respecter)
-
-1. **Une seule source de vérité** : on modifie uniquement un **nouveau fichier** dans `migrations/`
-   (numéro suivant, ex. `00023_...sql`), puis on régénère `setup/`.
-2. **Jamais** modifier `setup/*.sql` à la main (fichiers générés).
-3. **Jamais** exécuter `legacy/**` ni `tools/**` sur la base de production.
-4. Pour un correctif en urgence : créer la migration **puis** exécuter `setup/00_full_setup.sql`.
-
-## 🔁 Régénérer l'ensemble canonique
-
-```powershell
-npm run db:build     # régénère supabase/setup/
-npm run db:check     # vérifie que setup/ est à jour (utilisé en CI)
+```
+Supabase → SQL Editor → coller TOUT le fichier → Run
 ```
 
-Comment ça marche :
-`legacy/consolidated_schema.sql` + `migrations/00001..000NN` (ordre croissant) → découpage
-en instructions → **la dernière définition de chaque fonction/trigger/policy gagne** →
-écriture de `setup/01..04` (chaque instruction porte son origine en commentaire `-- [fichier:ligne]`).
+- ✅ **Tout est dedans** : tables, index, types, seeds, stockage, fonctions (34), triggers, policies RLS (106) et privilèges (GRANT/REVOKE + durcissement).
+- ✅ **Idempotent** : réexécutable à volonté, **sans erreur et sans perte de données**.
+- ✅ **Sûr même sur une base ancienne** : les RPC sont précédées d'un `DROP FUNCTION IF EXISTS`
+  (évite l'erreur *« cannot change name of input parameter »*).
+- ✅ **Vérifié automatiquement** avant génération : chaque policy/trigger/index/GRANT doit pointer
+  sur une table ou une fonction réellement définie, avec la bonne signature.
 
-## 🔒 Durcissement appliqué automatiquement
+## 📁 Structure du dossier
 
-* les **15 RPC d'administration** (`add_reward`, `approve_submission`, `validate_deposit`,
-  `validate_withdrawal`, `ban_user`, `delete_user`, `create_task/_plan…`,
-  `get_platform_stats`, `get_users_with_details`) portent une garde
-  `IF auth.uid() IS NOT NULL AND NOT public.is_admin() THEN … 'Non autorisé'` ;
-* elles sont **retirées de l'accès anonyme** (`REVOKE … FROM PUBLIC, anon`), ainsi que
-  `credit_referral_commission`, `credit_feeexpay_deposit`, `request_withdrawal_feeexpay`
-  (réservées au `service_role`).
+| Élément | Rôle | À exécuter ? |
+|---|---|---|
+| **`INSTALL.sql`** | **Fichier unique à exécuter** (généré) | ✅ **oui** |
+| `sources/base_schema.sql` | Schéma de base (tables, RLS, seeds) — matière première | ❌ non |
+| `sources/migrations/00001…00022` | Historique des correctifs (déjà inclus dans INSTALL.sql) | ❌ non |
+| `tools/` | Outils d'administration (reset, plans/catégories) | ⚠️ manuel |
+| `functions/` | Edge Functions Deno | — |
 
-Sans ce durcissement, la clé `anon` (publique, présente dans le navigateur) permettait
-d'appeler directement `/rest/v1/rpc/add_reward` ou `validate_deposit`.
+> ℹ️ `sources/` = **matière première** du générateur. On y modifie une migration,
+> on lance `npm run db:build`, et `INSTALL.sql` est reconstruit.
 
-## 💰 Parrainage (règle métier en vigueur)
+## 🔁 Régénérer / vérifier
+
+```powershell
+npm run db:build     # reconstruit supabase/INSTALL.sql depuis supabase/sources/
+npm run db:check     # vérifie qu'INSTALL.sql est à jour (exécuté en CI)
+```
+
+Fonctionnement du générateur (`scripts/build-supabase-setup.mjs`) :
+`sources/base_schema.sql` + `sources/migrations/00001…000NN` (ordre croissant) → découpage en
+instructions → **la dernière définition de chaque fonction/trigger/policy gagne** → écriture de
+`INSTALL.sql` en 4 sections (§1 schéma, §2 fonctions, §3 triggers+RLS, §4 privilèges).
+Chaque instruction porte son origine en commentaire : `-- [sources/migrations/00010_…sql:23]`.
+
+## ➕ Ajouter une modification
+
+1. Créer `sources/migrations/00023_ta_modification.sql` (idempotent : `CREATE OR REPLACE`,
+   `IF NOT EXISTS`, `DROP … IF EXISTS`).
+2. `npm run db:build` (vérifie les références puis reconstruit `INSTALL.sql`).
+3. Exécuter `INSTALL.sql` sur Supabase (SQL Editor → Run).
+4. Committer **les deux** (la migration + `INSTALL.sql`).
+
+## 🔒 Durcissement inclus
+
+- Les **15 RPC d'administration** (`add_reward`, `approve_submission`, `validate_deposit`,
+  `validate_withdrawal`, `ban_user`, `delete_user`, `create_task/_plan…`, `get_platform_stats`,
+  `get_users_with_details`) portent une garde `IF auth.uid() IS NOT NULL AND NOT public.is_admin()`
+  et sont **retirées de l'accès anonyme** (`REVOKE … FROM PUBLIC, anon`).
+- `credit_referral_commission`, `credit_feeexpay_deposit` et `request_withdrawal_feeexpay`
+  sont réservées au `service_role`.
+
+Sans ce durcissement, la clé `anon` (publique, présente dans le navigateur) permettait d'appeler
+directement `/rest/v1/rpc/add_reward` ou `validate_deposit`.
+
+## 💰 Parrainage (règle en vigueur)
 
 **Aucun crédit** à l'inscription ni à la saisie d'un code : le parrain touche
-`referral_commission_percent` (défaut **10 %**) du montant **réellement investi** par son
-filleul, versé par `activate_plan()` → `credit_referral_commission()`
+`referral_commission_percent` (défaut **10 %**) du montant **réellement investi** par son filleul,
+versé par `activate_plan()` → `credit_referral_commission()`
 (migration `00022_referral_investment_commission.sql`).
 
 ## 🆘 En cas de doute sur l'état de la base
 
-Exécuter `setup/00_full_setup.sql` : la base est ramenée à l'état exact attendu par le code
-déployé (tables, fonctions, RLS, privilèges), sans perte de données.
+Exécuter `INSTALL.sql` : la base est ramenée à l'état exact attendu par le code déployé,
+sans perte de données.
+

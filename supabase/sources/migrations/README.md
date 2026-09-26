@@ -1,8 +1,9 @@
 # 📜 Historique des migrations (déjà appliquées)
 
 Ce dossier est **historique** : ces fichiers ont été exécutés sur la base au fil du
-développement. **Ne les rejouez pas** un par un — utilisez
-[`../setup/00_full_setup.sql`](../setup/00_full_setup.sql), qui contient l'état final.
+développement. Ils servent de **source** au générateur et ne doivent **pas** être exécutés
+individuellement — utilisez le fichier unique
+[`../../INSTALL.sql`](../../INSTALL.sql) (état final complet, idempotent).
 
 | # | Fichier | Apport principal |
 |---|---|---|
@@ -33,14 +34,14 @@ développement. **Ne les rejouez pas** un par un — utilisez
 
 1. Créer `00023_ton_correctif.sql` (idempotent : `CREATE OR REPLACE`, `IF NOT EXISTS`,
    `DROP … IF EXISTS`).
-2. Régénérer l'ensemble canonique :
+2. Régénérer le fichier unique :
    ```powershell
    npm run db:build
    ```
-3. Exécuter `../setup/00_full_setup.sql` sur la base (Supabase → SQL Editor).
-4. Committer **les deux** (la migration + `setup/`).
+3. Exécuter `../../INSTALL.sql` sur la base (Supabase → SQL Editor → Run).
+4. Committer **les deux** (la migration + `INSTALL.sql`).
 
-> ⚠️ `legacy/dbg/*.sql` contient d'**anciennes copies de debug** de ces fonctions
-> (référence `credit_referral_commission` sur les *gains*, `activate_plan` sans
-> parrainage…). Elles sont **obsolètes** : ne jamais les exécuter, elles écraseraient
-> l'état actuel.
+> ℹ️ Les anciens lots de debug (`dbg/01..07_fonctions.sql`) et le doublon
+> `security_fixes.sql` ont été **supprimés** : ils contenaient des versions périmées
+> (parrainage basé sur les *gains*, RPC sans garde admin) qui auraient écrasé l'état actuel.
+> Pour revenir à une version antérieure, utilisez l'historique Git.

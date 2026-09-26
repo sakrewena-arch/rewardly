@@ -1,21 +1,35 @@
--- ======================================================================
--- REWARDLY — INSTALLATION / MISE À JOUR COMPLÈTE (fichier unique)   (étape 0/4)
--- GÉNÉRÉ par scripts/build-supabase-setup.mjs — NE PAS ÉDITER À LA MAIN.
--- Modifier supabase/migrations/, puis régénérer.
--- Copier-coller intégral dans le SQL Editor Supabase.
--- ======================================================================
+/*
+ * ==========================================================================
+ * REWARDLY — INSTALLATION / MISE À JOUR COMPLÈTE DE LA BASE DE DONNÉES
+ * ==========================================================================
+ *
+ * ⭐ FICHIER UNIQUE À EXÉCUTER :
+ *      Supabase → SQL Editor → coller TOUT ce fichier → Run
+ *
+ * ✅ Idempotent : peut être exécuté plusieurs fois, sans erreur et
+ *    sans perte de données (CREATE IF NOT EXISTS / DROP IF EXISTS /
+ *    CREATE OR REPLACE / DROP FUNCTION puis CREATE pour les RPC).
+ *
+ * Contenu :
+--   • §1 — SCHÉMA (tables, index, types, seeds, stockage)
+--   • §2 — FONCTIONS (34)
+--   • §3 — TRIGGERS (12) + RLS (106 policies)
+--   • §4 — PRIVILÈGES (GRANT/REVOKE + durcissement)
+ *
+ * ⚠️ NE PAS ÉDITER À LA MAIN : ce fichier est GÉNÉRÉ par
+ *    scripts/build-supabase-setup.mjs à partir de supabase/sources/
+ *    (modifier une migration dans supabase/sources/migrations/, puis
+ *     exécuter : npm run db:build).
+ *
+ * ==========================================================================
+ */
 
 
--- ~~~~ INCLUS : 01_schema.sql ~~~~
+/* ======================================================================
+ * §1 — SCHÉMA (tables, index, types, seeds, stockage)
+ * ====================================================================== */
 
--- ======================================================================
--- REWARDLY — SCHÉMA — extensions, types, tables, index, seeds, storage   (étape 1/4)
--- GÉNÉRÉ par scripts/build-supabase-setup.mjs — NE PAS ÉDITER À LA MAIN.
--- Modifier supabase/migrations/, puis régénérer.
--- À exécuter en premier (idempotent).
--- ======================================================================
-
--- [supabase/legacy/consolidated_schema.sql:1]
+-- [supabase/sources/base_schema.sql:1]
 -- ============================================================
 -- REWARDLY - CONSOLIDATED SCHEMA (IDEMPOTENT)
 -- ============================================================
@@ -29,7 +43,7 @@
 -- ============================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- [supabase/legacy/consolidated_schema.sql:1]
+-- [supabase/sources/base_schema.sql:1]
 -- ============================================================
 -- 2. TABLES (CREATE IF NOT EXISTS)
 -- ============================================================
@@ -51,7 +65,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:1]
+-- [supabase/sources/base_schema.sql:1]
 -- WALLETS
 CREATE TABLE IF NOT EXISTS wallets (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -64,7 +78,7 @@ CREATE TABLE IF NOT EXISTS wallets (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:1]
+-- [supabase/sources/base_schema.sql:1]
 -- WALLET TRANSACTIONS
 CREATE TABLE IF NOT EXISTS wallet_transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -78,17 +92,17 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:1]
+-- [supabase/sources/base_schema.sql:1]
 -- Compatibilité : applique le type 'service' sur les bases existantes (idempotent)
 ALTER TABLE public.wallet_transactions
   DROP CONSTRAINT IF EXISTS wallet_transactions_type_check;
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 ALTER TABLE public.wallet_transactions
   ADD CONSTRAINT wallet_transactions_type_check
   CHECK (type IN ('deposit', 'withdrawal', 'reward', 'investment', 'bonus', 'referral', 'admin_adjustment', 'service'));
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- PLANS
 CREATE TABLE IF NOT EXISTS plans (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -108,7 +122,7 @@ CREATE TABLE IF NOT EXISTS plans (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- INVESTMENTS
 CREATE TABLE IF NOT EXISTS investments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -123,7 +137,7 @@ CREATE TABLE IF NOT EXISTS investments (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- TASK CATEGORIES
 CREATE TABLE IF NOT EXISTS task_categories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -133,7 +147,7 @@ CREATE TABLE IF NOT EXISTS task_categories (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- TASKS
 CREATE TABLE IF NOT EXISTS tasks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -156,7 +170,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- SUBMISSION FIELDS
 CREATE TABLE IF NOT EXISTS submission_fields (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -171,7 +185,7 @@ CREATE TABLE IF NOT EXISTS submission_fields (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- TASK SUBMISSIONS
 CREATE TABLE IF NOT EXISTS task_submissions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -184,7 +198,7 @@ CREATE TABLE IF NOT EXISTS task_submissions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- SUBMISSION ANSWERS
 CREATE TABLE IF NOT EXISTS submission_answers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -194,7 +208,7 @@ CREATE TABLE IF NOT EXISTS submission_answers (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- DEPOSITS
 CREATE TABLE IF NOT EXISTS deposits (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -210,7 +224,7 @@ CREATE TABLE IF NOT EXISTS deposits (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- WITHDRAWALS
 CREATE TABLE IF NOT EXISTS withdrawals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -225,7 +239,7 @@ CREATE TABLE IF NOT EXISTS withdrawals (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- NOTIFICATIONS
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -237,7 +251,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- PAYMENT METHODS
 CREATE TABLE IF NOT EXISTS payment_methods (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -250,7 +264,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- REFERRALS
 CREATE TABLE IF NOT EXISTS referrals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -261,7 +275,7 @@ CREATE TABLE IF NOT EXISTS referrals (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- SYSTEM SETTINGS
 CREATE TABLE IF NOT EXISTS system_settings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -272,7 +286,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- ADMIN LOGS
 CREATE TABLE IF NOT EXISTS admin_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -284,7 +298,7 @@ CREATE TABLE IF NOT EXISTS admin_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- DAILY STATISTICS
 CREATE TABLE IF NOT EXISTS daily_statistics (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -296,7 +310,7 @@ CREATE TABLE IF NOT EXISTS daily_statistics (
   UNIQUE(user_id, date)
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- BANNERS
 CREATE TABLE IF NOT EXISTS banners (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -309,7 +323,7 @@ CREATE TABLE IF NOT EXISTS banners (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- ANNOUNCEMENTS
 CREATE TABLE IF NOT EXISTS announcements (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -320,73 +334,73 @@ CREATE TABLE IF NOT EXISTS announcements (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/legacy/consolidated_schema.sql:63]
+-- [supabase/sources/base_schema.sql:63]
 -- ============================================================
 -- 3. INDEXES (IF NOT EXISTS)
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
 
--- [supabase/legacy/consolidated_schema.sql:286]
+-- [supabase/sources/base_schema.sql:286]
 CREATE INDEX IF NOT EXISTS idx_profiles_referral_code ON profiles(referral_code);
 
--- [supabase/legacy/consolidated_schema.sql:287]
+-- [supabase/sources/base_schema.sql:287]
 CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
 
--- [supabase/legacy/consolidated_schema.sql:288]
+-- [supabase/sources/base_schema.sql:288]
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_id ON wallet_transactions(user_id);
 
--- [supabase/legacy/consolidated_schema.sql:289]
+-- [supabase/sources/base_schema.sql:289]
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_wallet_id ON wallet_transactions(wallet_id);
 
--- [supabase/legacy/consolidated_schema.sql:290]
+-- [supabase/sources/base_schema.sql:290]
 CREATE INDEX IF NOT EXISTS idx_wallet_transactions_created_at ON wallet_transactions(created_at DESC);
 
--- [supabase/legacy/consolidated_schema.sql:291]
+-- [supabase/sources/base_schema.sql:291]
 CREATE INDEX IF NOT EXISTS idx_investments_user_id ON investments(user_id);
 
--- [supabase/legacy/consolidated_schema.sql:292]
+-- [supabase/sources/base_schema.sql:292]
 CREATE INDEX IF NOT EXISTS idx_investments_status ON investments(status);
 
--- [supabase/legacy/consolidated_schema.sql:293]
+-- [supabase/sources/base_schema.sql:293]
 CREATE INDEX IF NOT EXISTS idx_tasks_plan_id ON tasks(plan_id);
 
--- [supabase/legacy/consolidated_schema.sql:294]
+-- [supabase/sources/base_schema.sql:294]
 CREATE INDEX IF NOT EXISTS idx_tasks_is_active ON tasks(is_active);
 
--- [supabase/legacy/consolidated_schema.sql:295]
+-- [supabase/sources/base_schema.sql:295]
 CREATE INDEX IF NOT EXISTS idx_task_submissions_user_id ON task_submissions(user_id);
 
--- [supabase/legacy/consolidated_schema.sql:296]
+-- [supabase/sources/base_schema.sql:296]
 CREATE INDEX IF NOT EXISTS idx_task_submissions_status ON task_submissions(status);
 
--- [supabase/legacy/consolidated_schema.sql:297]
+-- [supabase/sources/base_schema.sql:297]
 CREATE INDEX IF NOT EXISTS idx_deposits_user_id ON deposits(user_id);
 
--- [supabase/legacy/consolidated_schema.sql:298]
+-- [supabase/sources/base_schema.sql:298]
 CREATE INDEX IF NOT EXISTS idx_deposits_status ON deposits(status);
 
--- [supabase/legacy/consolidated_schema.sql:299]
+-- [supabase/sources/base_schema.sql:299]
 CREATE INDEX IF NOT EXISTS idx_withdrawals_user_id ON withdrawals(user_id);
 
--- [supabase/legacy/consolidated_schema.sql:300]
+-- [supabase/sources/base_schema.sql:300]
 CREATE INDEX IF NOT EXISTS idx_withdrawals_status ON withdrawals(status);
 
--- [supabase/legacy/consolidated_schema.sql:301]
+-- [supabase/sources/base_schema.sql:301]
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 
--- [supabase/legacy/consolidated_schema.sql:302]
+-- [supabase/sources/base_schema.sql:302]
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 
--- [supabase/legacy/consolidated_schema.sql:303]
+-- [supabase/sources/base_schema.sql:303]
 CREATE INDEX IF NOT EXISTS idx_daily_statistics_user_date ON daily_statistics(user_id, date);
 
--- [supabase/legacy/consolidated_schema.sql:304]
+-- [supabase/sources/base_schema.sql:304]
 CREATE INDEX IF NOT EXISTS idx_admin_logs_admin_id ON admin_logs(admin_id);
 
--- [supabase/legacy/consolidated_schema.sql:305]
+-- [supabase/sources/base_schema.sql:305]
 CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DESC);
 
--- [supabase/legacy/consolidated_schema.sql:470]
+-- [supabase/sources/base_schema.sql:470]
 -- ============================================================
 -- 6. ROW LEVEL SECURITY (ENABLE + POLICIES)
 -- ============================================================
@@ -394,64 +408,64 @@ CREATE INDEX IF NOT EXISTS idx_admin_logs_created_at ON admin_logs(created_at DE
 -- Enable RLS on all tables
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:489]
+-- [supabase/sources/base_schema.sql:489]
 ALTER TABLE wallets ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:490]
+-- [supabase/sources/base_schema.sql:490]
 ALTER TABLE wallet_transactions ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:491]
+-- [supabase/sources/base_schema.sql:491]
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:492]
+-- [supabase/sources/base_schema.sql:492]
 ALTER TABLE task_submissions ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:493]
+-- [supabase/sources/base_schema.sql:493]
 ALTER TABLE deposits ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:494]
+-- [supabase/sources/base_schema.sql:494]
 ALTER TABLE withdrawals ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:495]
+-- [supabase/sources/base_schema.sql:495]
 ALTER TABLE investments ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:496]
+-- [supabase/sources/base_schema.sql:496]
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:497]
+-- [supabase/sources/base_schema.sql:497]
 ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:498]
+-- [supabase/sources/base_schema.sql:498]
 ALTER TABLE plans ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:499]
+-- [supabase/sources/base_schema.sql:499]
 ALTER TABLE task_categories ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:500]
+-- [supabase/sources/base_schema.sql:500]
 ALTER TABLE submission_fields ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:501]
+-- [supabase/sources/base_schema.sql:501]
 ALTER TABLE submission_answers ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:502]
+-- [supabase/sources/base_schema.sql:502]
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:503]
+-- [supabase/sources/base_schema.sql:503]
 ALTER TABLE payment_methods ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:504]
+-- [supabase/sources/base_schema.sql:504]
 ALTER TABLE admin_logs ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:505]
+-- [supabase/sources/base_schema.sql:505]
 ALTER TABLE daily_statistics ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:506]
+-- [supabase/sources/base_schema.sql:506]
 ALTER TABLE banners ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:507]
+-- [supabase/sources/base_schema.sql:507]
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 
--- [supabase/legacy/consolidated_schema.sql:507]
+-- [supabase/sources/base_schema.sql:507]
 -- ============================================================
 -- DROP ALL OLD POLICIES (to avoid duplicates)
 -- ============================================================
@@ -467,7 +481,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- [supabase/legacy/consolidated_schema.sql:1959]
+-- [supabase/sources/base_schema.sql:1959]
 -- ============================================================
 -- 8. SEED DATA (ON CONFLICT DO NOTHING)
 -- ============================================================
@@ -480,7 +494,7 @@ VALUES
   ('Gold', 'gold', 20000, -1, 40, 50, '#FFD700', 'Crown', 'Premium', 3)
 ON CONFLICT (slug) DO NOTHING;
 
--- [supabase/legacy/consolidated_schema.sql:1959]
+-- [supabase/sources/base_schema.sql:1959]
 -- Default task categories
 INSERT INTO task_categories (name, slug, icon)
 VALUES
@@ -494,7 +508,7 @@ VALUES
   ('Mission personnalisée', 'custom', 'Target')
 ON CONFLICT (slug) DO NOTHING;
 
--- [supabase/legacy/consolidated_schema.sql:1959]
+-- [supabase/sources/base_schema.sql:1959]
 -- Default payment methods
 INSERT INTO payment_methods (name, slug, icon, instructions)
 VALUES
@@ -504,7 +518,7 @@ VALUES
   ('Carte bancaire', 'card', 'CreditCard', 'Payez par carte bancaire (Visa/Mastercard)')
 ON CONFLICT (slug) DO NOTHING;
 
--- [supabase/legacy/consolidated_schema.sql:1959]
+-- [supabase/sources/base_schema.sql:1959]
 -- Default system settings
 INSERT INTO system_settings (key, value, description)
 VALUES
@@ -519,7 +533,7 @@ VALUES
   ('max_referrals', '50', 'Nombre maximum de filleuls')
 ON CONFLICT (key) DO NOTHING;
 
--- [supabase/legacy/consolidated_schema.sql:1959]
+-- [supabase/sources/base_schema.sql:1959]
 -- ============================================================
 -- 9. SET ADMIN ROLE FOR wlagbema@gmail.com
 -- ============================================================
@@ -532,7 +546,7 @@ WHERE user_id IN (
   SELECT id FROM auth.users WHERE email = 'wlagbema@gmail.com'
 );
 
--- [supabase/legacy/consolidated_schema.sql:2021]
+-- [supabase/sources/base_schema.sql:2021]
 INSERT INTO profiles (user_id, full_name, username, role, referral_code, is_active, is_banned)
 SELECT 
   u.id,
@@ -549,7 +563,7 @@ WHERE u.email = 'wlagbema@gmail.com'
   )
 ON CONFLICT (user_id) DO NOTHING;
 
--- [supabase/legacy/consolidated_schema.sql:2037]
+-- [supabase/sources/base_schema.sql:2037]
 INSERT INTO wallets (user_id, balance, invested_capital, total_earnings, locked_amount)
 SELECT id, 0, 0, 0, 0
 FROM auth.users
@@ -559,7 +573,7 @@ WHERE email = 'wlagbema@gmail.com'
   )
 ON CONFLICT (user_id) DO NOTHING;
 
--- [supabase/legacy/consolidated_schema.sql:2037]
+-- [supabase/sources/base_schema.sql:2037]
 -- ============================================================
 -- 10. STORAGE BUCKET (proofs)
 -- ============================================================
@@ -573,7 +587,7 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- [supabase/legacy/consolidated_schema.sql:2082]
+-- [supabase/sources/base_schema.sql:2082]
 -- ============================================================
 -- 11. VERIFICATION
 -- ============================================================
@@ -601,14 +615,14 @@ BEGIN
   END IF;
 END $$;
 
--- [supabase/legacy/consolidated_schema.sql:2082]
+-- [supabase/sources/base_schema.sql:2082]
 -- Message de confirmation
 DO $$
 BEGIN
   RAISE NOTICE '✅ Rewardly schema consolidé appliqué avec succès !';
 END $$;
 
--- [supabase/migrations/00001_initial_schema.sql:1]
+-- [supabase/sources/migrations/00001_initial_schema.sql:1]
 -- ============================================
 -- WALLET TRANSACTIONS
 -- ============================================
@@ -624,7 +638,7 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- [supabase/migrations/00003_system_users.sql:1]
+-- [supabase/sources/migrations/00003_system_users.sql:1]
 -- Rewardly System Users
 -- Migration 00003: Create system users for public access
 -- Fixes FK violations when inserting with system UUIDs
@@ -646,7 +660,7 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- [supabase/migrations/00003_system_users.sql:1]
+-- [supabase/sources/migrations/00003_system_users.sql:1]
 -- System User (used by user-actions.ts)
 INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
 VALUES (
@@ -658,7 +672,7 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- [supabase/migrations/00003_system_users.sql:1]
+-- [supabase/sources/migrations/00003_system_users.sql:1]
 -- ============================================
 -- ENSURE PROFILES AND WALLETS EXIST
 -- (in case the trigger was already fired or doesn't run)
@@ -669,14 +683,14 @@ VALUES
   ('00000000-0000-0000-0000-000000000001', 'System User', 'system-user', 'user', 'SYSUSER01')
 ON CONFLICT (user_id) DO NOTHING;
 
--- [supabase/migrations/00003_system_users.sql:43]
+-- [supabase/sources/migrations/00003_system_users.sql:43]
 INSERT INTO wallets (user_id, balance, invested_capital, total_earnings, locked_amount)
 VALUES 
   ('00000000-0000-0000-0000-000000000000', 0, 0, 0, 0),
   ('00000000-0000-0000-0000-000000000001', 0, 0, 0, 0)
 ON CONFLICT (user_id) DO NOTHING;
 
--- [supabase/migrations/00003_system_users.sql:43]
+-- [supabase/sources/migrations/00003_system_users.sql:43]
 -- ============================================
 -- DROP FK CONSTRAINTS TO auth.users
 -- So public access works even without real auth users
@@ -685,59 +699,59 @@ ON CONFLICT (user_id) DO NOTHING;
 -- admin_logs
 ALTER TABLE admin_logs DROP CONSTRAINT IF EXISTS admin_logs_admin_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:43]
+-- [supabase/sources/migrations/00003_system_users.sql:43]
 -- task_submissions
 ALTER TABLE task_submissions DROP CONSTRAINT IF EXISTS task_submissions_user_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:59]
+-- [supabase/sources/migrations/00003_system_users.sql:59]
 ALTER TABLE task_submissions DROP CONSTRAINT IF EXISTS task_submissions_reviewed_by_fkey;
 
--- [supabase/migrations/00003_system_users.sql:59]
+-- [supabase/sources/migrations/00003_system_users.sql:59]
 -- deposits
 ALTER TABLE deposits DROP CONSTRAINT IF EXISTS deposits_user_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:63]
+-- [supabase/sources/migrations/00003_system_users.sql:63]
 ALTER TABLE deposits DROP CONSTRAINT IF EXISTS deposits_reviewed_by_fkey;
 
--- [supabase/migrations/00003_system_users.sql:63]
+-- [supabase/sources/migrations/00003_system_users.sql:63]
 -- withdrawals
 ALTER TABLE withdrawals DROP CONSTRAINT IF EXISTS withdrawals_user_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:67]
+-- [supabase/sources/migrations/00003_system_users.sql:67]
 ALTER TABLE withdrawals DROP CONSTRAINT IF EXISTS withdrawals_reviewed_by_fkey;
 
--- [supabase/migrations/00003_system_users.sql:67]
+-- [supabase/sources/migrations/00003_system_users.sql:67]
 -- wallets
 ALTER TABLE wallets DROP CONSTRAINT IF EXISTS wallets_user_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:67]
+-- [supabase/sources/migrations/00003_system_users.sql:67]
 -- profiles
 ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_user_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:67]
+-- [supabase/sources/migrations/00003_system_users.sql:67]
 -- wallet_transactions
 ALTER TABLE wallet_transactions DROP CONSTRAINT IF EXISTS wallet_transactions_user_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:67]
+-- [supabase/sources/migrations/00003_system_users.sql:67]
 -- notifications
 ALTER TABLE notifications DROP CONSTRAINT IF EXISTS notifications_user_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:67]
+-- [supabase/sources/migrations/00003_system_users.sql:67]
 -- investments
 ALTER TABLE investments DROP CONSTRAINT IF EXISTS investments_user_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:67]
+-- [supabase/sources/migrations/00003_system_users.sql:67]
 -- referrals
 ALTER TABLE referrals DROP CONSTRAINT IF EXISTS referrals_referrer_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:89]
+-- [supabase/sources/migrations/00003_system_users.sql:89]
 ALTER TABLE referrals DROP CONSTRAINT IF EXISTS referrals_referred_id_fkey;
 
--- [supabase/migrations/00003_system_users.sql:89]
+-- [supabase/sources/migrations/00003_system_users.sql:89]
 -- daily_statistics
 ALTER TABLE daily_statistics DROP CONSTRAINT IF EXISTS daily_statistics_user_id_fkey;
 
--- [supabase/migrations/00004_fix_task_creation.sql:41]
+-- [supabase/sources/migrations/00004_fix_task_creation.sql:41]
 -- ============================================
 -- CREATE SYSTEM USERS IN auth.users (if not exists)
 -- ============================================
@@ -747,7 +761,7 @@ VALUES
   ('00000000-0000-0000-0000-000000000001', 'system-user@rewardly.local', '{"full_name": "System User"}'::jsonb, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
--- [supabase/migrations/00006_cleanup_data.sql:1]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:1]
 -- Rewardly Cleanup Data
 -- Migration 00006: Clean all existing demo/system data
 -- Requirement: "efface les données des comptes existants et supprime les comptes"
@@ -757,56 +771,56 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================
 DELETE FROM submission_answers;
 
--- [supabase/migrations/00006_cleanup_data.sql:9]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:9]
 DELETE FROM submission_fields;
 
--- [supabase/migrations/00006_cleanup_data.sql:10]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:10]
 DELETE FROM task_submissions;
 
--- [supabase/migrations/00006_cleanup_data.sql:11]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:11]
 DELETE FROM tasks;
 
--- [supabase/migrations/00006_cleanup_data.sql:12]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:12]
 DELETE FROM task_categories;
 
--- [supabase/migrations/00006_cleanup_data.sql:13]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:13]
 DELETE FROM deposits;
 
--- [supabase/migrations/00006_cleanup_data.sql:14]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:14]
 DELETE FROM withdrawals;
 
--- [supabase/migrations/00006_cleanup_data.sql:15]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:15]
 DELETE FROM wallet_transactions;
 
--- [supabase/migrations/00006_cleanup_data.sql:16]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:16]
 DELETE FROM investments;
 
--- [supabase/migrations/00006_cleanup_data.sql:17]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:17]
 DELETE FROM referrals;
 
--- [supabase/migrations/00006_cleanup_data.sql:18]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:18]
 DELETE FROM notifications;
 
--- [supabase/migrations/00006_cleanup_data.sql:19]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:19]
 DELETE FROM admin_logs;
 
--- [supabase/migrations/00006_cleanup_data.sql:20]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:20]
 DELETE FROM daily_statistics;
 
--- [supabase/migrations/00006_cleanup_data.sql:21]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:21]
 DELETE FROM wallets;
 
--- [supabase/migrations/00006_cleanup_data.sql:22]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:22]
 DELETE FROM profiles;
 
--- [supabase/migrations/00006_cleanup_data.sql:22]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:22]
 -- Delete system users from auth.users (except the authenticated users)
 DELETE FROM auth.users WHERE id IN (
   '00000000-0000-0000-0000-000000000000',
   '00000000-0000-0000-0000-000000000001'
 );
 
--- [supabase/migrations/00006_cleanup_data.sql:22]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:22]
 -- Keep plans, system_settings, payment_methods, banners, announcements
 -- (these are platform configuration, not user data)
 
@@ -824,7 +838,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:47]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:47]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wallets_user_id_fkey') THEN
     ALTER TABLE wallets ADD CONSTRAINT wallets_user_id_fkey
@@ -832,7 +846,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:54]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:54]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wallet_transactions_user_id_fkey') THEN
     ALTER TABLE wallet_transactions ADD CONSTRAINT wallet_transactions_user_id_fkey
@@ -840,7 +854,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:61]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:61]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'task_submissions_user_id_fkey') THEN
     ALTER TABLE task_submissions ADD CONSTRAINT task_submissions_user_id_fkey
@@ -848,7 +862,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:68]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:68]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'task_submissions_reviewed_by_fkey') THEN
     ALTER TABLE task_submissions ADD CONSTRAINT task_submissions_reviewed_by_fkey
@@ -856,7 +870,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:75]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:75]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'deposits_user_id_fkey') THEN
     ALTER TABLE deposits ADD CONSTRAINT deposits_user_id_fkey
@@ -864,7 +878,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:82]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:82]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'deposits_reviewed_by_fkey') THEN
     ALTER TABLE deposits ADD CONSTRAINT deposits_reviewed_by_fkey
@@ -872,7 +886,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:89]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:89]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'withdrawals_user_id_fkey') THEN
     ALTER TABLE withdrawals ADD CONSTRAINT withdrawals_user_id_fkey
@@ -880,7 +894,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:96]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:96]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'withdrawals_reviewed_by_fkey') THEN
     ALTER TABLE withdrawals ADD CONSTRAINT withdrawals_reviewed_by_fkey
@@ -888,7 +902,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:103]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:103]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'notifications_user_id_fkey') THEN
     ALTER TABLE notifications ADD CONSTRAINT notifications_user_id_fkey
@@ -896,7 +910,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:110]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:110]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'investments_user_id_fkey') THEN
     ALTER TABLE investments ADD CONSTRAINT investments_user_id_fkey
@@ -904,7 +918,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:117]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:117]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_logs_admin_id_fkey') THEN
     ALTER TABLE admin_logs ADD CONSTRAINT admin_logs_admin_id_fkey
@@ -912,7 +926,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:124]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:124]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'referrals_referrer_id_fkey') THEN
     ALTER TABLE referrals ADD CONSTRAINT referrals_referrer_id_fkey
@@ -920,7 +934,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:131]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:131]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'referrals_referred_id_fkey') THEN
     ALTER TABLE referrals ADD CONSTRAINT referrals_referred_id_fkey
@@ -928,7 +942,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00006_cleanup_data.sql:138]
+-- [supabase/sources/migrations/00006_cleanup_data.sql:138]
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'daily_statistics_user_id_fkey') THEN
     ALTER TABLE daily_statistics ADD CONSTRAINT daily_statistics_user_id_fkey
@@ -936,7 +950,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- [supabase/migrations/00009_feexpay_integration.sql:1]
+-- [supabase/sources/migrations/00009_feexpay_integration.sql:1]
 -- ============================================================
 -- MIGRATION : Intégration FeeXPay
 -- Ajoute les colonnes nécessaires pour les dépôts et retraits
@@ -948,21 +962,21 @@ ALTER TABLE public.deposits
   ADD COLUMN IF NOT EXISTS account_number TEXT,
   ADD COLUMN IF NOT EXISTS network TEXT;
 
--- [supabase/migrations/00009_feexpay_integration.sql:1]
+-- [supabase/sources/migrations/00009_feexpay_integration.sql:1]
 -- 2. Ajouter les colonnes à la table withdrawals
 ALTER TABLE public.withdrawals
   ADD COLUMN IF NOT EXISTS feexpay_reference TEXT,
   ADD COLUMN IF NOT EXISTS account_info TEXT,
   ADD COLUMN IF NOT EXISTS network TEXT;
 
--- [supabase/migrations/00009_feexpay_integration.sql:1]
+-- [supabase/sources/migrations/00009_feexpay_integration.sql:1]
 -- 3. Index pour les recherches par référence FeeXPay
 CREATE INDEX IF NOT EXISTS idx_deposits_feexpay_reference ON public.deposits(feexpay_reference);
 
--- [supabase/migrations/00009_feexpay_integration.sql:20]
+-- [supabase/sources/migrations/00009_feexpay_integration.sql:20]
 CREATE INDEX IF NOT EXISTS idx_withdrawals_feexpay_reference ON public.withdrawals(feexpay_reference);
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 17. AJOUTER withdrawal_timezone_offset aux settings par défaut
 -- ============================================================
@@ -970,7 +984,7 @@ INSERT INTO system_settings (key, value, description)
 VALUES ('withdrawal_timezone_offset', '0', 'Offset fuseau pour le jour de retrait (heures, défaut 0 = UTC)')
 ON CONFLICT (key) DO NOTHING;
 
--- [supabase/migrations/00011_user_preferences.sql:1]
+-- [supabase/sources/migrations/00011_user_preferences.sql:1]
 -- ============================================================
 -- Table des préférences utilisateur (langue, devise, notifications)
 -- ============================================================
@@ -984,11 +998,11 @@ create table if not exists public.user_preferences (
   updated_at timestamptz not null default now()
 );
 
--- [supabase/migrations/00011_user_preferences.sql:24]
+-- [supabase/sources/migrations/00011_user_preferences.sql:24]
 -- RLS
 alter table public.user_preferences enable row level security;
 
--- [supabase/migrations/00012_service_orders.sql:1]
+-- [supabase/sources/migrations/00012_service_orders.sql:1]
 -- ============================================================
 -- Table des commandes de services publicitaires
 -- ============================================================
@@ -1018,11 +1032,11 @@ create table if not exists public.service_orders (
   updated_at timestamptz not null default now()
 );
 
--- [supabase/migrations/00012_service_orders.sql:32]
+-- [supabase/sources/migrations/00012_service_orders.sql:32]
 -- RLS
 alter table public.service_orders enable row level security;
 
--- [supabase/migrations/00016_push_tokens.sql:1]
+-- [supabase/sources/migrations/00016_push_tokens.sql:1]
 -- ============================================================
 -- MIGRATION 00016 : TOKENS PUSH NATIFS (Capacitor)
 -- ============================================================
@@ -1043,39 +1057,39 @@ CREATE TABLE IF NOT EXISTS public.push_tokens (
   UNIQUE (user_id, token)
 );
 
--- [supabase/migrations/00016_push_tokens.sql:1]
+-- [supabase/sources/migrations/00016_push_tokens.sql:1]
 -- Index pour rechercher rapidement les tokens d'un utilisateur
 CREATE INDEX IF NOT EXISTS idx_push_tokens_user_id ON public.push_tokens(user_id);
 
--- [supabase/migrations/00016_push_tokens.sql:1]
+-- [supabase/sources/migrations/00016_push_tokens.sql:1]
 -- RLS : un utilisateur ne peut gérer que SES tokens
 ALTER TABLE public.push_tokens ENABLE ROW LEVEL SECURITY;
 
--- [supabase/migrations/00016_push_tokens.sql:27]
+-- [supabase/sources/migrations/00016_push_tokens.sql:27]
 DROP POLICY IF EXISTS push_tokens_select_own ON public.push_tokens;
 
--- [supabase/migrations/00016_push_tokens.sql:28]
+-- [supabase/sources/migrations/00016_push_tokens.sql:28]
 CREATE POLICY push_tokens_select_own
   ON public.push_tokens FOR SELECT
   USING (auth.uid() = user_id);
 
--- [supabase/migrations/00016_push_tokens.sql:32]
+-- [supabase/sources/migrations/00016_push_tokens.sql:32]
 DROP POLICY IF EXISTS push_tokens_insert_own ON public.push_tokens;
 
--- [supabase/migrations/00016_push_tokens.sql:33]
+-- [supabase/sources/migrations/00016_push_tokens.sql:33]
 CREATE POLICY push_tokens_insert_own
   ON public.push_tokens FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
--- [supabase/migrations/00016_push_tokens.sql:37]
+-- [supabase/sources/migrations/00016_push_tokens.sql:37]
 DROP POLICY IF EXISTS push_tokens_delete_own ON public.push_tokens;
 
--- [supabase/migrations/00016_push_tokens.sql:38]
+-- [supabase/sources/migrations/00016_push_tokens.sql:38]
 CREATE POLICY push_tokens_delete_own
   ON public.push_tokens FOR DELETE
   USING (auth.uid() = user_id);
 
--- [supabase/migrations/00018_reminder_notifications.sql:1]
+-- [supabase/sources/migrations/00018_reminder_notifications.sql:1]
 -- ============================================================
 -- REWARDLY - NOTIFICATIONS DE RAPPEL (août 2026)
 -- ============================================================
@@ -1092,11 +1106,11 @@ CREATE POLICY push_tokens_delete_own
 ALTER TABLE public.notifications
   ADD COLUMN IF NOT EXISTS reference TEXT;
 
--- [supabase/migrations/00018_reminder_notifications.sql:17]
+-- [supabase/sources/migrations/00018_reminder_notifications.sql:17]
 CREATE INDEX IF NOT EXISTS idx_notifications_reference
   ON public.notifications(reference);
 
--- [supabase/migrations/00020_ensure_wallet_columns.sql:1]
+-- [supabase/sources/migrations/00020_ensure_wallet_columns.sql:1]
 -- ============================================================
 -- REWARDLY - S'assurer que wallets possède les colonnes financières
 -- ============================================================
@@ -1110,29 +1124,29 @@ CREATE INDEX IF NOT EXISTS idx_notifications_reference
 ALTER TABLE public.wallets
   ADD COLUMN IF NOT EXISTS invested_capital DECIMAL(12,0) NOT NULL DEFAULT 0;
 
--- [supabase/migrations/00020_ensure_wallet_columns.sql:14]
+-- [supabase/sources/migrations/00020_ensure_wallet_columns.sql:14]
 ALTER TABLE public.wallets
   ADD COLUMN IF NOT EXISTS total_earnings DECIMAL(12,0) NOT NULL DEFAULT 0;
 
--- [supabase/migrations/00020_ensure_wallet_columns.sql:17]
+-- [supabase/sources/migrations/00020_ensure_wallet_columns.sql:17]
 ALTER TABLE public.wallets
   ADD COLUMN IF NOT EXISTS locked_amount DECIMAL(12,0) NOT NULL DEFAULT 0;
 
--- [supabase/migrations/00020_ensure_wallet_columns.sql:17]
+-- [supabase/sources/migrations/00020_ensure_wallet_columns.sql:17]
 -- Vérification
 select column_name, data_type, is_nullable
 from information_schema.columns
 where table_schema = 'public' and table_name = 'wallets'
 order by ordinal_position;
 
--- [supabase/migrations/00021_fix_upgrade_and_referrals.sql:134]
+-- [supabase/sources/migrations/00021_fix_upgrade_and_referrals.sql:134]
 -- ============================================================
 -- 3. GARANTIR profiles.referred_by (si absente)
 -- ============================================================
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS referred_by UUID REFERENCES public.profiles(id);
 
--- [supabase/migrations/00022_referral_investment_commission.sql:1]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:1]
 -- ============================================================
 -- MIGRATION 00022 : PARRAINAGE = 10% DE L'INVESTISSEMENT DU FILLEUL
 -- ============================================================
@@ -1169,21 +1183,21 @@ INSERT INTO public.system_settings (key, value, description)
 VALUES ('referral_commission_percent', '10'::jsonb, 'Pourcentage de parrainage sur l''investissement du filleul')
 ON CONFLICT (key) DO NOTHING;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:1]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:1]
 -- Passe l'ancienne valeur (5%) à 10% ; laisse toute autre valeur choisie par l'admin.
 UPDATE public.system_settings
 SET value = '10'::jsonb, updated_at = NOW()
 WHERE key = 'referral_commission_percent'
   AND COALESCE(value::text, '') IN ('5', '"5"');
 
--- [supabase/migrations/00022_referral_investment_commission.sql:1]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:1]
 -- La commission fixe n'est plus utilisée par le parrainage (conservée pour
 -- compatibilité de l'écran admin / de la validation Zod).
 INSERT INTO public.system_settings (key, value, description)
 VALUES ('referral_commission_fixed', '0'::jsonb, 'OBSOLÈTE : plus utilisée (parrainage = % de l''investissement)')
 ON CONFLICT (key) DO NOTHING;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:370]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:370]
 -- ============================================================
 -- 5. AUDIT (optionnel) — anciennes commissions de 500 FCFA
 -- ============================================================
@@ -1203,17 +1217,36 @@ ON CONFLICT (key) DO NOTHING;
 --   UPDATE public.wallet_transactions SET status = 'failed' WHERE id = '<TX_UUID>';
 -- ============================================================
 
+/* ======================================================================
+ * §2 — FONCTIONS (34)
+ * ====================================================================== */
 
--- ~~~~ INCLUS : 02_functions.sql ~~~~
+DROP FUNCTION IF EXISTS public.add_reward(uuid, decimal, text);
+DROP FUNCTION IF EXISTS public.submit_task(uuid, uuid, jsonb);
+DROP FUNCTION IF EXISTS public.approve_submission(uuid, uuid, text);
+DROP FUNCTION IF EXISTS public.reject_submission(uuid, uuid, text);
+DROP FUNCTION IF EXISTS public.validate_deposit(uuid, uuid, boolean, text);
+DROP FUNCTION IF EXISTS public.validate_withdrawal(uuid, uuid, text, text);
+DROP FUNCTION IF EXISTS public.ban_user(uuid, uuid, boolean);
+DROP FUNCTION IF EXISTS public.delete_user(uuid, uuid);
+DROP FUNCTION IF EXISTS public.activate_plan(uuid, uuid, decimal);
+DROP FUNCTION IF EXISTS public.create_task(uuid, text, text, decimal, uuid, uuid, text, integer, text, text, integer, integer, timestamptz, text, jsonb);
+DROP FUNCTION IF EXISTS public.update_task(uuid, uuid, text, text, decimal, uuid, text, integer, text, text, integer, integer, timestamptz, text, boolean);
+DROP FUNCTION IF EXISTS public.delete_task(uuid, uuid);
+DROP FUNCTION IF EXISTS public.create_plan(uuid, text, text, decimal, integer, decimal, decimal, text, text, text);
+DROP FUNCTION IF EXISTS public.toggle_plan_status(uuid, uuid, boolean);
+DROP FUNCTION IF EXISTS public.update_plan(uuid, uuid, text, decimal, integer, decimal, decimal, text, text, text);
+DROP FUNCTION IF EXISTS public.get_users_with_details(text);
+DROP FUNCTION IF EXISTS public.submit_withdrawal(uuid, decimal, text, text);
+DROP FUNCTION IF EXISTS public.submit_deposit(uuid, decimal, text, text, text);
+DROP FUNCTION IF EXISTS public.request_withdrawal_feeexpay(uuid, decimal, text, text, text);
+DROP FUNCTION IF EXISTS public.credit_feeexpay_deposit(text);
+DROP FUNCTION IF EXISTS public.get_withdrawable_amount(uuid);
+DROP FUNCTION IF EXISTS public.upsert_user_preferences(text, text, boolean, boolean);
+DROP FUNCTION IF EXISTS public.create_service_order(text, text, text, text, text, text, numeric, text, integer, text, text, text, text, text, text, text, text);
+DROP FUNCTION IF EXISTS public.credit_referral_commission(uuid, numeric, uuid);
 
--- ======================================================================
--- REWARDLY — FONCTIONS — 34 fonctions (état final dédupliqué)   (étape 2/4)
--- GÉNÉRÉ par scripts/build-supabase-setup.mjs — NE PAS ÉDITER À LA MAIN.
--- Modifier supabase/migrations/, puis régénérer.
--- Dernière version de chaque fonction selon l'ordre des migrations.
--- ======================================================================
-
--- [supabase/migrations/00015_referral_atomic_wallet.sql:1]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:1]
 -- ============================================================
 -- MIGRATION 00015 : PARRAINAGE ROBUSTE + OPÉRATIONS WALLET ATOMIQUES
 -- ============================================================
@@ -1250,7 +1283,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:1]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:1]
 -- ============================================================
 -- 1. INSCRIPTION : enregistrer la relation, NE RIEN CRÉDITER
 -- ============================================================
@@ -1316,7 +1349,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00001_initial_schema.sql:418]
+-- [supabase/sources/migrations/00001_initial_schema.sql:418]
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
@@ -1326,7 +1359,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- HELPER FUNCTION: Check if user is admin
 -- ============================================
@@ -1343,7 +1376,7 @@ AS $$
   );
 $$;
 
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- HELPER FUNCTION: Check if user is moderator or admin
 -- ============================================
@@ -1360,7 +1393,7 @@ AS $$
   );
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- MIGRATION 00010 : Correctifs sécurité et bugs
 -- Corrige :
@@ -1424,7 +1457,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00019_task_reward_notifications.sql:1]
+-- [supabase/sources/migrations/00019_task_reward_notifications.sql:1]
 -- ============================================================
 -- REWARDLY - NOTIFICATIONS DE RÉCOMPENSE DE TÂCHES (août 2026)
 -- ============================================================
@@ -1579,7 +1612,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00019_task_reward_notifications.sql:1]
+-- [supabase/sources/migrations/00019_task_reward_notifications.sql:1]
 -- ============================================================
 -- 2. APPROVE SUBMISSION (avec notification sur validation manuelle)
 -- ============================================================
@@ -1671,7 +1704,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 3. REJECT SUBMISSION (is_staff)
 -- ============================================================
@@ -1705,7 +1738,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 4. VALIDATE DEPOSIT (is_admin dans la RPC)
 -- ============================================================
@@ -1784,7 +1817,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00014_fix_double_debit_withdrawal.sql:1]
+-- [supabase/sources/migrations/00014_fix_double_debit_withdrawal.sql:1]
 -- ============================================================
 -- MIGRATION 00014 : CORRECTION DU DOUBLE DÉBIT DES RETRAITS FEEXPAY
 -- ============================================================
@@ -1927,7 +1960,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 13. BAN USER (is_admin dans la RPC)
 -- ============================================================
@@ -1961,7 +1994,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 14. DELETE USER (is_admin dans la RPC + gestion d'erreurs)
 -- ============================================================
@@ -2011,7 +2044,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:115]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:115]
 -- ============================================================
 -- 3. ACTIVATION DE PACK : verser 10% au parrain (sur l'investissement)
 -- ============================================================
@@ -2132,7 +2165,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 7. CREATE TASK (corrige bug p_category_id jamais utilisé)
 -- ============================================================
@@ -2203,7 +2236,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 8. UPDATE TASK (is_admin)
 -- ============================================================
@@ -2261,7 +2294,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 9. DELETE TASK (is_admin)
 -- ============================================================
@@ -2291,7 +2324,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 10. CREATE PLAN (is_admin)
 -- ============================================================
@@ -2333,7 +2366,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 11. TOGGLE PLAN STATUS (is_admin)
 -- ============================================================
@@ -2364,7 +2397,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00010_security_and_bugfixes.sql:1]
+-- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
 -- 12. UPDATE PLAN (is_admin)
 -- ============================================================
@@ -2412,7 +2445,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00002_platform_management.sql:1]  << garde admin ajoutée automatiquement
+-- [supabase/sources/migrations/00002_platform_management.sql:1]  << garde admin ajoutée automatiquement
 -- ============================================
 -- GET PLATFORM STATS (admin dashboard)
 -- ============================================
@@ -2480,7 +2513,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00002_platform_management.sql:1]  << garde admin ajoutée automatiquement
+-- [supabase/sources/migrations/00002_platform_management.sql:1]  << garde admin ajoutée automatiquement
 -- ============================================
 -- GET USERS WITH DETAILS (admin - filter by plan)
 -- ============================================
@@ -2545,7 +2578,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00017_security_fixes.sql:87]
+-- [supabase/sources/migrations/00017_security_fixes.sql:87]
 -- ============================================================
 -- 5. SUBMIT WITHDRAWAL : règles métier + calcul retirable cohérent
 -- ============================================================
@@ -2652,7 +2685,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00017_security_fixes.sql:87]
+-- [supabase/sources/migrations/00017_security_fixes.sql:87]
 -- ============================================================
 -- 4. SUBMIT DEPOSIT : check auth.uid (défense en profondeur)
 -- ============================================================
@@ -2685,7 +2718,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00017_security_fixes.sql:87]
+-- [supabase/sources/migrations/00017_security_fixes.sql:87]
 -- ============================================================
 -- 7. REQUEST WITHDRAWAL FEEXPAY : règles métier + calcul cohérent
 -- ============================================================
@@ -2792,7 +2825,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:217]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:217]
 -- ============================================================
 -- 4. CRÉDIT DE DÉPÔT FEEXPAY ATOMIQUE (anti double-crédit)
 -- ============================================================
@@ -2864,7 +2897,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00017_security_fixes.sql:47]
+-- [supabase/sources/migrations/00017_security_fixes.sql:47]
 -- ============================================================
 -- 2. TRIGGER : bloquer la modification des champs sensibles du profil
 -- ============================================================
@@ -2892,7 +2925,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00017_security_fixes.sql:87]
+-- [supabase/sources/migrations/00017_security_fixes.sql:87]
 -- ============================================================
 -- 6. GET WITHDRAWABLE AMOUNT : calcul cohérent (gains - retraits - services)
 -- ============================================================
@@ -2927,7 +2960,7 @@ BEGIN
 END;
 $$;
 
--- [supabase/migrations/00001_initial_schema.sql:394]
+-- [supabase/sources/migrations/00001_initial_schema.sql:394]
 -- ============================================
 -- TRIGGERS
 -- ============================================
@@ -2949,7 +2982,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- [supabase/migrations/00011_user_preferences.sql:1]
+-- [supabase/sources/migrations/00011_user_preferences.sql:1]
 -- Trigger pour mettre à jour updated_at
 create or replace function public.handle_updated_at()
 returns trigger as $$
@@ -2959,7 +2992,7 @@ begin
 end;
 $$ language plpgsql;
 
--- [supabase/migrations/00011_user_preferences.sql:43]
+-- [supabase/sources/migrations/00011_user_preferences.sql:43]
 -- ============================================================
 -- Fonction RPC pour upsert les préférences (évite les conflits)
 -- ============================================================
@@ -2986,7 +3019,7 @@ begin
 end;
 $$;
 
--- [supabase/migrations/00012_service_orders.sql:47]
+-- [supabase/sources/migrations/00012_service_orders.sql:47]
 -- ============================================================
 -- Fonction RPC pour créer une commande + débiter le wallet
 -- ============================================================
@@ -3064,7 +3097,7 @@ begin
 end;
 $$;
 
--- [supabase/migrations/00016_push_tokens.sql:38]
+-- [supabase/sources/migrations/00016_push_tokens.sql:38]
 -- Trigger pour maintenir updated_at
 CREATE OR REPLACE FUNCTION update_push_tokens_updated_at()
 RETURNS TRIGGER AS $$
@@ -3074,7 +3107,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:115]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:115]
 -- ============================================================
 -- 2. CRÉDIT DE COMMISSION (sur l'investissement du filleul)
 -- ============================================================
@@ -3188,76 +3221,70 @@ BEGIN
 END;
 $$;
 
-
--- ~~~~ INCLUS : 03_rls_triggers.sql ~~~~
-
--- ======================================================================
--- REWARDLY — TRIGGERS (12) + RLS POLICIES (106)   (étape 3/4)
--- GÉNÉRÉ par scripts/build-supabase-setup.mjs — NE PAS ÉDITER À LA MAIN.
--- Modifier supabase/migrations/, puis régénérer.
--- Chaque objet est supprimé puis recréé : idempotent.
--- ======================================================================
+/* ======================================================================
+ * §3 — TRIGGERS (12) + RLS (106 policies)
+ * ====================================================================== */
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
--- [supabase/migrations/00022_referral_investment_commission.sql:115]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:115]
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.rewardly_handle_new_user();
 
 DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
--- [supabase/migrations/00001_initial_schema.sql:431]
+-- [supabase/sources/migrations/00001_initial_schema.sql:431]
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 DROP TRIGGER IF EXISTS update_wallets_updated_at ON wallets;
--- [supabase/migrations/00001_initial_schema.sql:432]
+-- [supabase/sources/migrations/00001_initial_schema.sql:432]
 CREATE TRIGGER update_wallets_updated_at BEFORE UPDATE ON wallets FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 DROP TRIGGER IF EXISTS update_investments_updated_at ON investments;
--- [supabase/migrations/00001_initial_schema.sql:433]
+-- [supabase/sources/migrations/00001_initial_schema.sql:433]
 CREATE TRIGGER update_investments_updated_at BEFORE UPDATE ON investments FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 DROP TRIGGER IF EXISTS update_tasks_updated_at ON tasks;
--- [supabase/migrations/00001_initial_schema.sql:434]
+-- [supabase/sources/migrations/00001_initial_schema.sql:434]
 CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 DROP TRIGGER IF EXISTS update_deposits_updated_at ON deposits;
--- [supabase/migrations/00001_initial_schema.sql:435]
+-- [supabase/sources/migrations/00001_initial_schema.sql:435]
 CREATE TRIGGER update_deposits_updated_at BEFORE UPDATE ON deposits FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 DROP TRIGGER IF EXISTS update_withdrawals_updated_at ON withdrawals;
--- [supabase/migrations/00001_initial_schema.sql:436]
+-- [supabase/sources/migrations/00001_initial_schema.sql:436]
 CREATE TRIGGER update_withdrawals_updated_at BEFORE UPDATE ON withdrawals FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 DROP TRIGGER IF EXISTS update_system_settings_updated_at ON system_settings;
--- [supabase/legacy/consolidated_schema.sql:452]
+-- [supabase/sources/base_schema.sql:452]
 CREATE TRIGGER update_system_settings_updated_at BEFORE UPDATE ON system_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 DROP TRIGGER IF EXISTS prevent_profile_security_changes ON public.profiles;
--- [supabase/migrations/00017_security_fixes.sql:87]
+-- [supabase/sources/migrations/00017_security_fixes.sql:87]
 CREATE TRIGGER prevent_profile_security_changes
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.prevent_profile_security_changes();
 
 DROP TRIGGER IF EXISTS set_user_preferences_updated_at ON public.user_preferences;
--- [supabase/migrations/00011_user_preferences.sql:24]
+-- [supabase/sources/migrations/00011_user_preferences.sql:24]
 create trigger set_user_preferences_updated_at
   before update on public.user_preferences
   for each row execute function public.handle_updated_at();
 
 DROP TRIGGER IF EXISTS set_service_orders_updated_at ON public.service_orders;
--- [supabase/migrations/00012_service_orders.sql:32]
+-- [supabase/sources/migrations/00012_service_orders.sql:32]
 create trigger set_service_orders_updated_at
   before update on public.service_orders
   for each row execute function public.handle_updated_at();
 
 DROP TRIGGER IF EXISTS update_push_tokens_updated_at ON public.push_tokens;
--- [supabase/migrations/00016_push_tokens.sql:52]
+-- [supabase/sources/migrations/00016_push_tokens.sql:52]
 CREATE TRIGGER update_push_tokens_updated_at
   BEFORE UPDATE ON public.push_tokens
   FOR EACH ROW EXECUTE FUNCTION update_push_tokens_updated_at();
 
 DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- PROFILES POLICIES
 -- ============================================
@@ -3266,7 +3293,7 @@ CREATE POLICY "Users can view own profile" ON profiles
   FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can view referral-linked profiles" ON public.profiles;
--- [supabase/migrations/00021_fix_upgrade_and_referrals.sql:148]
+-- [supabase/sources/migrations/00021_fix_upgrade_and_referrals.sql:148]
 CREATE POLICY "Users can view referral-linked profiles" ON public.profiles
   FOR SELECT USING (
     EXISTS (
@@ -3280,37 +3307,37 @@ CREATE POLICY "Users can view referral-linked profiles" ON public.profiles
   );
 
 DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can update their own profile
 CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can insert their own profile (trigger creates it, but allow fallback)
 CREATE POLICY "Users can insert own profile" ON profiles
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can view all profiles" ON profiles;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all profiles
 CREATE POLICY "Admins can view all profiles" ON profiles
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can update all profiles" ON profiles;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can update all profiles
 CREATE POLICY "Admins can update all profiles" ON profiles
   FOR UPDATE USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can delete profiles" ON profiles;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can delete profiles
 CREATE POLICY "Admins can delete profiles" ON profiles
   FOR DELETE USING (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own wallet" ON wallets;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- WALLETS POLICIES
 -- ============================================
@@ -3319,24 +3346,24 @@ CREATE POLICY "Users can view own wallet" ON wallets
   FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can view all wallets" ON wallets;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all wallets
 CREATE POLICY "Admins can view all wallets" ON wallets
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can update all wallets" ON wallets;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can update all wallets
 CREATE POLICY "Admins can update all wallets" ON wallets
   FOR UPDATE USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can manage all wallets" ON wallets;
--- [supabase/legacy/consolidated_schema.sql:571]
+-- [supabase/sources/base_schema.sql:571]
 CREATE POLICY "Admins can manage all wallets" ON wallets
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own transactions" ON wallet_transactions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- WALLET TRANSACTIONS POLICIES
 -- ============================================
@@ -3345,19 +3372,19 @@ CREATE POLICY "Users can view own transactions" ON wallet_transactions
   FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can view all transactions" ON wallet_transactions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all transactions
 CREATE POLICY "Admins can view all transactions" ON wallet_transactions
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can manage all transactions" ON wallet_transactions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage all transactions
 CREATE POLICY "Admins can manage all transactions" ON wallet_transactions
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Anyone can view active tasks" ON tasks;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- TASKS POLICIES
 -- ============================================
@@ -3366,19 +3393,19 @@ CREATE POLICY "Anyone can view active tasks" ON tasks
   FOR SELECT USING (is_active = true);
 
 DROP POLICY IF EXISTS "Admins can view all tasks" ON tasks;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all tasks (including inactive)
 CREATE POLICY "Admins can view all tasks" ON tasks
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can manage tasks" ON tasks;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage tasks
 CREATE POLICY "Admins can manage tasks" ON tasks
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own submissions" ON task_submissions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- TASK SUBMISSIONS POLICIES
 -- ============================================
@@ -3387,31 +3414,31 @@ CREATE POLICY "Users can view own submissions" ON task_submissions
   FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can create submissions" ON task_submissions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can create submissions
 CREATE POLICY "Users can create submissions" ON task_submissions
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can update own submissions" ON task_submissions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can update their own submissions
 CREATE POLICY "Users can update own submissions" ON task_submissions
   FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Staff can view all submissions" ON task_submissions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Staff can view all submissions
 CREATE POLICY "Staff can view all submissions" ON task_submissions
   FOR SELECT USING (is_staff());
 
 DROP POLICY IF EXISTS "Staff can update all submissions" ON task_submissions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Staff can update all submissions
 CREATE POLICY "Staff can update all submissions" ON task_submissions
   FOR UPDATE USING (is_staff());
 
 DROP POLICY IF EXISTS "Users can view own deposits" ON deposits;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- DEPOSITS POLICIES
 -- ============================================
@@ -3420,24 +3447,24 @@ CREATE POLICY "Users can view own deposits" ON deposits
   FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can view all deposits" ON deposits;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all deposits
 CREATE POLICY "Admins can view all deposits" ON deposits
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can update all deposits" ON deposits;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can update all deposits
 CREATE POLICY "Admins can update all deposits" ON deposits
   FOR UPDATE USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can insert deposits" ON deposits;
--- [supabase/legacy/consolidated_schema.sql:621]
+-- [supabase/sources/base_schema.sql:621]
 CREATE POLICY "Admins can insert deposits" ON deposits
   FOR INSERT WITH CHECK (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own withdrawals" ON withdrawals;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- WITHDRAWALS POLICIES
 -- ============================================
@@ -3446,24 +3473,24 @@ CREATE POLICY "Users can view own withdrawals" ON withdrawals
   FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can view all withdrawals" ON withdrawals;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all withdrawals
 CREATE POLICY "Admins can view all withdrawals" ON withdrawals
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can update all withdrawals" ON withdrawals;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can update all withdrawals
 CREATE POLICY "Admins can update all withdrawals" ON withdrawals
   FOR UPDATE USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can insert withdrawals" ON withdrawals;
--- [supabase/legacy/consolidated_schema.sql:636]
+-- [supabase/sources/base_schema.sql:636]
 CREATE POLICY "Admins can insert withdrawals" ON withdrawals
   FOR INSERT WITH CHECK (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own investments" ON investments;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- INVESTMENTS POLICIES
 -- ============================================
@@ -3472,31 +3499,31 @@ CREATE POLICY "Users can view own investments" ON investments
   FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can create investments" ON investments;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can create investments
 CREATE POLICY "Users can create investments" ON investments
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can update own investments" ON investments;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can update their own investments
 CREATE POLICY "Users can update own investments" ON investments
   FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can view all investments" ON investments;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all investments
 CREATE POLICY "Admins can view all investments" ON investments
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can update all investments" ON investments;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can update all investments
 CREATE POLICY "Admins can update all investments" ON investments
   FOR UPDATE USING (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own notifications" ON notifications;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- NOTIFICATIONS POLICIES
 -- ============================================
@@ -3505,40 +3532,40 @@ CREATE POLICY "Users can view own notifications" ON notifications
   FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
 
 DROP POLICY IF EXISTS "Users can update own notifications" ON notifications;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can update their own notifications
 CREATE POLICY "Users can update own notifications" ON notifications
   FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can manage notifications" ON notifications;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage all notifications
 CREATE POLICY "Admins can manage notifications" ON notifications
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own referrals" ON public.referrals;
--- [supabase/migrations/00021_fix_upgrade_and_referrals.sql:124]
+-- [supabase/sources/migrations/00021_fix_upgrade_and_referrals.sql:124]
 CREATE POLICY "Users can view own referrals" ON public.referrals
   FOR SELECT USING (auth.uid() = referrer_id OR auth.uid() = referred_id);
 
 DROP POLICY IF EXISTS "Users can insert own referrals" ON public.referrals;
--- [supabase/migrations/00021_fix_upgrade_and_referrals.sql:130]
+-- [supabase/sources/migrations/00021_fix_upgrade_and_referrals.sql:130]
 CREATE POLICY "Users can insert own referrals" ON public.referrals
   FOR INSERT WITH CHECK (auth.uid() = referrer_id);
 
 DROP POLICY IF EXISTS "Users can update own referrals" ON public.referrals;
--- [supabase/migrations/00021_fix_upgrade_and_referrals.sql:134]
+-- [supabase/sources/migrations/00021_fix_upgrade_and_referrals.sql:134]
 CREATE POLICY "Users can update own referrals" ON public.referrals
   FOR UPDATE USING (auth.uid() = referrer_id OR auth.uid() = referred_id);
 
 DROP POLICY IF EXISTS "Admins can view all referrals" ON referrals;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all referrals
 CREATE POLICY "Admins can view all referrals" ON referrals
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Anyone can view active plans" ON plans;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- PLANS POLICIES
 -- ============================================
@@ -3547,19 +3574,19 @@ CREATE POLICY "Anyone can view active plans" ON plans
   FOR SELECT USING (is_active = true);
 
 DROP POLICY IF EXISTS "Admins can view all plans" ON plans;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all plans
 CREATE POLICY "Admins can view all plans" ON plans
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can manage plans" ON plans;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage plans
 CREATE POLICY "Admins can manage plans" ON plans
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Anyone can view categories" ON task_categories;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- TASK CATEGORIES POLICIES
 -- ============================================
@@ -3568,13 +3595,13 @@ CREATE POLICY "Anyone can view categories" ON task_categories
   FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Admins can manage categories" ON task_categories;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage categories
 CREATE POLICY "Admins can manage categories" ON task_categories
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Anyone can view submission fields" ON submission_fields;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- SUBMISSION FIELDS POLICIES
 -- ============================================
@@ -3583,13 +3610,13 @@ CREATE POLICY "Anyone can view submission fields" ON submission_fields
   FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Admins can manage submission fields" ON submission_fields;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage submission fields
 CREATE POLICY "Admins can manage submission fields" ON submission_fields
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own answers" ON submission_answers;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- SUBMISSION ANSWERS POLICIES
 -- ============================================
@@ -3604,7 +3631,7 @@ CREATE POLICY "Users can view own answers" ON submission_answers
   );
 
 DROP POLICY IF EXISTS "Users can create answers" ON submission_answers;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can create submission answers
 CREATE POLICY "Users can create answers" ON submission_answers
   FOR INSERT WITH CHECK (
@@ -3616,13 +3643,13 @@ CREATE POLICY "Users can create answers" ON submission_answers
   );
 
 DROP POLICY IF EXISTS "Staff can view all answers" ON submission_answers;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Staff can view all submission answers
 CREATE POLICY "Staff can view all answers" ON submission_answers
   FOR SELECT USING (is_staff());
 
 DROP POLICY IF EXISTS "Anyone can view settings" ON system_settings;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- SYSTEM SETTINGS POLICIES
 -- ============================================
@@ -3631,13 +3658,13 @@ CREATE POLICY "Anyone can view settings" ON system_settings
   FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Admins can manage settings" ON system_settings;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage settings
 CREATE POLICY "Admins can manage settings" ON system_settings
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Anyone can view payment methods" ON payment_methods;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- PAYMENT METHODS POLICIES
 -- ============================================
@@ -3646,13 +3673,13 @@ CREATE POLICY "Anyone can view payment methods" ON payment_methods
   FOR SELECT USING (is_active = true);
 
 DROP POLICY IF EXISTS "Admins can manage payment methods" ON payment_methods;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage payment methods
 CREATE POLICY "Admins can manage payment methods" ON payment_methods
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can view logs" ON admin_logs;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- ADMIN LOGS POLICIES
 -- ============================================
@@ -3661,13 +3688,13 @@ CREATE POLICY "Admins can view logs" ON admin_logs
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Admins can insert logs" ON admin_logs;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Only admins can insert logs
 CREATE POLICY "Admins can insert logs" ON admin_logs
   FOR INSERT WITH CHECK (is_admin());
 
 DROP POLICY IF EXISTS "Users can view own stats" ON daily_statistics;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- DAILY STATISTICS POLICIES
 -- ============================================
@@ -3676,25 +3703,25 @@ CREATE POLICY "Users can view own stats" ON daily_statistics
   FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can insert own stats" ON daily_statistics;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can insert their own statistics
 CREATE POLICY "Users can insert own stats" ON daily_statistics
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can update own stats" ON daily_statistics;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can update their own statistics
 CREATE POLICY "Users can update own stats" ON daily_statistics
   FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Admins can view all stats" ON daily_statistics;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can view all statistics
 CREATE POLICY "Admins can view all stats" ON daily_statistics
   FOR SELECT USING (is_admin());
 
 DROP POLICY IF EXISTS "Anyone can view banners" ON banners;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- BANNERS POLICIES
 -- ============================================
@@ -3703,13 +3730,13 @@ CREATE POLICY "Anyone can view banners" ON banners
   FOR SELECT USING (is_active = true);
 
 DROP POLICY IF EXISTS "Admins can manage banners" ON banners;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage banners
 CREATE POLICY "Admins can manage banners" ON banners
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Anyone can view announcements" ON announcements;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- ============================================
 -- ANNOUNCEMENTS POLICIES
 -- ============================================
@@ -3718,13 +3745,13 @@ CREATE POLICY "Anyone can view announcements" ON announcements
   FOR SELECT USING (is_active = true);
 
 DROP POLICY IF EXISTS "Admins can manage announcements" ON announcements;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Admins can manage announcements
 CREATE POLICY "Admins can manage announcements" ON announcements
   FOR ALL USING (is_admin());
 
 DROP POLICY IF EXISTS "Users can upload proofs" ON storage.objects;
--- [supabase/legacy/consolidated_schema.sql:2061]
+-- [supabase/sources/base_schema.sql:2061]
 CREATE POLICY "Users can upload proofs" ON storage.objects
   FOR INSERT WITH CHECK (
     bucket_id = 'proofs'
@@ -3732,7 +3759,7 @@ CREATE POLICY "Users can upload proofs" ON storage.objects
   );
 
 DROP POLICY IF EXISTS "Users can view proofs" ON storage.objects;
--- [supabase/legacy/consolidated_schema.sql:2068]
+-- [supabase/sources/base_schema.sql:2068]
 CREATE POLICY "Users can view proofs" ON storage.objects
   FOR SELECT USING (
     bucket_id = 'proofs'
@@ -3747,7 +3774,7 @@ CREATE POLICY "Users can view proofs" ON storage.objects
   );
 
 DROP POLICY IF EXISTS "Admins can delete proofs" ON storage.objects;
--- [supabase/legacy/consolidated_schema.sql:2082]
+-- [supabase/sources/base_schema.sql:2082]
 CREATE POLICY "Admins can delete proofs" ON storage.objects
   FOR DELETE USING (
     bucket_id = 'proofs'
@@ -3759,275 +3786,269 @@ CREATE POLICY "Admins can delete proofs" ON storage.objects
   );
 
 DROP POLICY IF EXISTS "Admins can view all submissions" ON task_submissions;
--- [supabase/migrations/00001_initial_schema.sql:374]
+-- [supabase/sources/migrations/00001_initial_schema.sql:374]
 CREATE POLICY "Admins can view all submissions" ON task_submissions FOR SELECT USING (
   EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role IN ('admin', 'super_admin', 'moderator'))
 );
 
 DROP POLICY IF EXISTS "Users can create deposits" ON deposits;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can create deposits
 CREATE POLICY "Users can create deposits" ON deposits
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can create withdrawals" ON withdrawals;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can create withdrawals
 CREATE POLICY "Users can create withdrawals" ON withdrawals
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Public can view submission answers" ON submission_answers;
--- [supabase/migrations/00005_public_select_policies.sql:87]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:87]
 CREATE POLICY "Public can view submission answers" ON submission_answers FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view submission fields" ON submission_fields;
--- [supabase/migrations/00005_public_select_policies.sql:81]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:81]
 CREATE POLICY "Public can view submission fields" ON submission_fields FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view logs" ON admin_logs;
--- [supabase/migrations/00005_public_select_policies.sql:105]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:105]
 CREATE POLICY "Public can view logs" ON admin_logs FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view stats" ON daily_statistics;
--- [supabase/migrations/00005_public_select_policies.sql:111]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:111]
 CREATE POLICY "Public can view stats" ON daily_statistics FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view settings" ON system_settings;
--- [supabase/migrations/00005_public_select_policies.sql:93]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:93]
 CREATE POLICY "Public can view settings" ON system_settings FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view payment methods" ON payment_methods;
--- [supabase/migrations/00005_public_select_policies.sql:99]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:99]
 CREATE POLICY "Public can view payment methods" ON payment_methods FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can update tasks" ON tasks;
--- [supabase/migrations/00002_platform_management.sql:1040]
+-- [supabase/sources/migrations/00002_platform_management.sql:1040]
 CREATE POLICY "Public can update tasks" ON tasks FOR UPDATE USING (true);
 
 DROP POLICY IF EXISTS "Public can delete tasks" ON tasks;
--- [supabase/migrations/00002_platform_management.sql:1042]
+-- [supabase/sources/migrations/00002_platform_management.sql:1042]
 CREATE POLICY "Public can delete tasks" ON tasks FOR DELETE USING (true);
 
 DROP POLICY IF EXISTS "Public can view plans" ON plans;
--- [supabase/migrations/00005_public_select_policies.sql:69]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:69]
 CREATE POLICY "Public can view plans" ON plans FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can manage plans" ON plans;
--- [supabase/migrations/00002_platform_management.sql:1049]
+-- [supabase/sources/migrations/00002_platform_management.sql:1049]
 CREATE POLICY "Public can manage plans" ON plans FOR ALL USING (true);
 
 DROP POLICY IF EXISTS "Public can view categories" ON task_categories;
--- [supabase/migrations/00005_public_select_policies.sql:75]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:75]
 CREATE POLICY "Public can view categories" ON task_categories FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can update deposits" ON deposits;
--- [supabase/migrations/00002_platform_management.sql:1058]
+-- [supabase/sources/migrations/00002_platform_management.sql:1058]
 CREATE POLICY "Public can update deposits" ON deposits FOR UPDATE USING (true);
 
 DROP POLICY IF EXISTS "Public can update withdrawals" ON withdrawals;
--- [supabase/migrations/00002_platform_management.sql:1062]
+-- [supabase/sources/migrations/00002_platform_management.sql:1062]
 CREATE POLICY "Public can update withdrawals" ON withdrawals FOR UPDATE USING (true);
 
 DROP POLICY IF EXISTS "Public can update submissions" ON task_submissions;
--- [supabase/migrations/00002_platform_management.sql:1066]
+-- [supabase/sources/migrations/00002_platform_management.sql:1066]
 CREATE POLICY "Public can update submissions" ON task_submissions FOR UPDATE USING (true);
 
 DROP POLICY IF EXISTS "Public can view investments" ON investments;
--- [supabase/migrations/00005_public_select_policies.sql:45]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:45]
 CREATE POLICY "Public can view investments" ON investments FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can update investments" ON investments;
--- [supabase/migrations/00002_platform_management.sql:1072]
+-- [supabase/sources/migrations/00002_platform_management.sql:1072]
 CREATE POLICY "Public can update investments" ON investments FOR UPDATE USING (true);
 
 DROP POLICY IF EXISTS "Public can view tasks" ON tasks;
--- [supabase/migrations/00005_public_select_policies.sql:9]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:9]
 CREATE POLICY "Public can view tasks" ON tasks FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view wallets" ON wallets;
--- [supabase/migrations/00005_public_select_policies.sql:15]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:15]
 CREATE POLICY "Public can view wallets" ON wallets FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view transactions" ON wallet_transactions;
--- [supabase/migrations/00005_public_select_policies.sql:21]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:21]
 CREATE POLICY "Public can view transactions" ON wallet_transactions FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view deposits" ON deposits;
--- [supabase/migrations/00005_public_select_policies.sql:27]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:27]
 CREATE POLICY "Public can view deposits" ON deposits FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view withdrawals" ON withdrawals;
--- [supabase/migrations/00005_public_select_policies.sql:33]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:33]
 CREATE POLICY "Public can view withdrawals" ON withdrawals FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view submissions" ON task_submissions;
--- [supabase/migrations/00005_public_select_policies.sql:39]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:39]
 CREATE POLICY "Public can view submissions" ON task_submissions FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view notifications" ON notifications;
--- [supabase/migrations/00005_public_select_policies.sql:51]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:51]
 CREATE POLICY "Public can view notifications" ON notifications FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view profiles" ON profiles;
--- [supabase/migrations/00005_public_select_policies.sql:57]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:57]
 CREATE POLICY "Public can view profiles" ON profiles FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public can view referrals" ON referrals;
--- [supabase/migrations/00005_public_select_policies.sql:63]
+-- [supabase/sources/migrations/00005_public_select_policies.sql:63]
 CREATE POLICY "Public can view referrals" ON referrals FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Users can update own wallet" ON wallets;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can update their own wallet (for balance display)
 CREATE POLICY "Users can update own wallet" ON wallets
   FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can insert own transactions" ON wallet_transactions;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can insert their own transactions (via RPC)
 CREATE POLICY "Users can insert own transactions" ON wallet_transactions
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can update own deposits" ON deposits;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can update their own deposits
 CREATE POLICY "Users can update own deposits" ON deposits
   FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can update own withdrawals" ON withdrawals;
--- [supabase/migrations/00008_restore_rls_policies.sql:62]
+-- [supabase/sources/migrations/00008_restore_rls_policies.sql:62]
 -- Users can update their own withdrawals
 CREATE POLICY "Users can update own withdrawals" ON withdrawals
   FOR UPDATE USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users read own preferences" ON public.user_preferences;
--- [supabase/migrations/00011_user_preferences.sql:33]
+-- [supabase/sources/migrations/00011_user_preferences.sql:33]
 create policy "Users read own preferences"
   on public.user_preferences for select
   using (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users insert own preferences" ON public.user_preferences;
--- [supabase/migrations/00011_user_preferences.sql:38]
+-- [supabase/sources/migrations/00011_user_preferences.sql:38]
 create policy "Users insert own preferences"
   on public.user_preferences for insert
   with check (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users update own preferences" ON public.user_preferences;
--- [supabase/migrations/00011_user_preferences.sql:43]
+-- [supabase/sources/migrations/00011_user_preferences.sql:43]
 create policy "Users update own preferences"
   on public.user_preferences for update
   using (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users read own service orders" ON public.service_orders;
--- [supabase/migrations/00012_service_orders.sql:41]
+-- [supabase/sources/migrations/00012_service_orders.sql:41]
 create policy "Users read own service orders"
   on public.service_orders for select
   using (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users insert service orders" ON public.service_orders;
--- [supabase/migrations/00012_service_orders.sql:47]
+-- [supabase/sources/migrations/00012_service_orders.sql:47]
 create policy "Users insert service orders"
   on public.service_orders for insert
   with check (auth.uid() = user_id);
 
+/* ======================================================================
+ * §4 — PRIVILÈGES (GRANT/REVOKE + durcissement)
+ * ====================================================================== */
 
--- ~~~~ INCLUS : 04_privileges.sql ~~~~
-
--- ======================================================================
--- REWARDLY — PRIVILÈGES — GRANT/REVOKE + durcissement   (étape 4/4)
--- GÉNÉRÉ par scripts/build-supabase-setup.mjs — NE PAS ÉDITER À LA MAIN.
--- Modifier supabase/migrations/, puis régénérer.
--- Les RPC d'administration ne sont plus accessibles aux clients anonymes.
--- ======================================================================
-
--- [supabase/legacy/consolidated_schema.sql:1891]
+-- [supabase/sources/base_schema.sql:1891]
 REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
 
--- [supabase/legacy/consolidated_schema.sql:1892]
+-- [supabase/sources/base_schema.sql:1892]
 REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
 
--- [supabase/legacy/consolidated_schema.sql:1893]
+-- [supabase/sources/base_schema.sql:1893]
 REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
 
--- [supabase/legacy/consolidated_schema.sql:1894]
+-- [supabase/sources/base_schema.sql:1894]
 GRANT EXECUTE ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
 
--- [supabase/legacy/consolidated_schema.sql:1956]
+-- [supabase/sources/base_schema.sql:1956]
 REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM PUBLIC;
 
--- [supabase/legacy/consolidated_schema.sql:1957]
+-- [supabase/sources/base_schema.sql:1957]
 REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM anon;
 
--- [supabase/legacy/consolidated_schema.sql:1958]
+-- [supabase/sources/base_schema.sql:1958]
 REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM authenticated;
 
--- [supabase/legacy/consolidated_schema.sql:1959]
+-- [supabase/sources/base_schema.sql:1959]
 GRANT EXECUTE ON FUNCTION credit_feeexpay_deposit(TEXT) TO service_role;
 
--- [supabase/legacy/consolidated_schema.sql:2572]
+-- [supabase/sources/base_schema.sql:2572]
 -- ============================================================
 -- 8. PRIVILÈGES D'EXÉCUTION des fonctions corrigées
 -- ============================================================
 GRANT EXECUTE ON FUNCTION activate_plan(UUID, UUID, DECIMAL) TO authenticated;
 
--- [supabase/legacy/consolidated_schema.sql:2578]
+-- [supabase/sources/base_schema.sql:2578]
 GRANT EXECUTE ON FUNCTION submit_withdrawal(UUID, DECIMAL, TEXT, TEXT) TO authenticated;
 
--- [supabase/legacy/consolidated_schema.sql:2579]
+-- [supabase/sources/base_schema.sql:2579]
 GRANT EXECUTE ON FUNCTION submit_deposit(UUID, DECIMAL, TEXT, TEXT, TEXT) TO authenticated;
 
--- [supabase/legacy/consolidated_schema.sql:2580]
+-- [supabase/sources/base_schema.sql:2580]
 GRANT EXECUTE ON FUNCTION get_withdrawable_amount(UUID) TO authenticated;
 
--- [supabase/legacy/consolidated_schema.sql:2580]
+-- [supabase/sources/base_schema.sql:2580]
 -- 🔒 Défense en profondeur : réserver les RPC financières user-facing au rôle
 --    authenticated (l'anon ne doit PAS pouvoir les appeler).
 REVOKE ALL ON FUNCTION activate_plan(UUID, UUID, DECIMAL) FROM PUBLIC;
 
--- [supabase/legacy/consolidated_schema.sql:2584]
+-- [supabase/sources/base_schema.sql:2584]
 REVOKE ALL ON FUNCTION submit_withdrawal(UUID, DECIMAL, TEXT, TEXT) FROM PUBLIC;
 
--- [supabase/legacy/consolidated_schema.sql:2585]
+-- [supabase/sources/base_schema.sql:2585]
 REVOKE ALL ON FUNCTION submit_deposit(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
 
--- [supabase/legacy/consolidated_schema.sql:2586]
+-- [supabase/sources/base_schema.sql:2586]
 REVOKE ALL ON FUNCTION get_withdrawable_amount(UUID) FROM PUBLIC;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:214]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:214]
 REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM PUBLIC;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:215]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:215]
 REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM anon;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:216]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:216]
 REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM authenticated;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:217]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:217]
 GRANT EXECUTE ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) TO service_role;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:290]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:290]
 REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM PUBLIC;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:291]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:291]
 REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM anon;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:292]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:292]
 REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM authenticated;
 
--- [supabase/migrations/00015_referral_atomic_wallet.sql:293]
+-- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:293]
 GRANT EXECUTE ON FUNCTION public.credit_feeexpay_deposit(text) TO service_role;
 
--- [supabase/migrations/00019_task_reward_notifications.sql:1]
+-- [supabase/sources/migrations/00019_task_reward_notifications.sql:1]
 -- Privilèges
 GRANT EXECUTE ON FUNCTION submit_task(UUID, UUID, JSONB) TO authenticated;
 
--- [supabase/migrations/00019_task_reward_notifications.sql:247]
+-- [supabase/sources/migrations/00019_task_reward_notifications.sql:247]
 GRANT EXECUTE ON FUNCTION approve_submission(UUID, UUID, TEXT) TO authenticated;
 
--- [supabase/migrations/00021_fix_upgrade_and_referrals.sql:118]
+-- [supabase/sources/migrations/00021_fix_upgrade_and_referrals.sql:118]
 GRANT EXECUTE ON FUNCTION activate_plan(UUID, UUID, DECIMAL) TO authenticated;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:115]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:115]
 -- ============================================================
 -- 4. PRIVILÈGES
 -- ============================================================
@@ -4035,30 +4056,27 @@ GRANT EXECUTE ON FUNCTION activate_plan(UUID, UUID, DECIMAL) TO authenticated;
 -- propre wallet, contrôlé par auth.uid()).
 GRANT EXECUTE ON FUNCTION public.activate_plan(UUID, UUID, DECIMAL) TO authenticated;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:361]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:361]
 REVOKE ALL ON FUNCTION public.activate_plan(UUID, UUID, DECIMAL) FROM PUBLIC;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:362]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:362]
 REVOKE ALL ON FUNCTION public.activate_plan(UUID, UUID, DECIMAL) FROM anon;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:362]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:362]
 -- 🔒 credit_referral_commission ne doit JAMAIS être appelable depuis un
 -- client (sinon un utilisateur pourrait se créditer une commission) :
 -- réservée aux fonctions serveur (SECURITY DEFINER) et au service_role.
 REVOKE ALL ON FUNCTION public.credit_referral_commission(UUID, NUMERIC, UUID) FROM PUBLIC;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:368]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:368]
 REVOKE ALL ON FUNCTION public.credit_referral_commission(UUID, NUMERIC, UUID) FROM anon;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:369]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:369]
 REVOKE ALL ON FUNCTION public.credit_referral_commission(UUID, NUMERIC, UUID) FROM authenticated;
 
--- [supabase/migrations/00022_referral_investment_commission.sql:370]
+-- [supabase/sources/migrations/00022_referral_investment_commission.sql:370]
 GRANT EXECUTE ON FUNCTION public.credit_referral_commission(UUID, NUMERIC, UUID) TO service_role;
 
--- ======================================================
--- DURCISSEMENT (généré) : accès ANONYME interdit
--- ======================================================
 REVOKE ALL ON FUNCTION public.add_reward(uuid, decimal, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.add_reward(uuid, decimal, text) FROM anon;
 REVOKE ALL ON FUNCTION public.approve_submission(uuid, uuid, text) FROM PUBLIC;

@@ -128,16 +128,24 @@ SUPABASE_SERVICE_ROLE_KEY=votre_service_role_key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-### 5. Exécuter le schéma SQL consolidé
+### 5. Exécuter le SQL de la base (UN SEUL fichier)
 
-**IMPORTANT :** Utilisez le fichier `supabase/consolidated_schema.sql` - il regroupe TOUT le SQL nécessaire (tables, RLS, fonctions RPC, seed data, bucket storage, admin).
+**IMPORTANT :** un **unique fichier** contient désormais TOUT le SQL (tables, RLS, fonctions RPC, seed, bucket storage, privilèges) :
 
-Le fichier est **IDEMPOTENT** : il peut être exécuté plusieurs fois sans erreur ("table already exists", etc.).
+➡️ **`supabase/INSTALL.sql`**
+
+Il est **IDEMPOTENT** : il peut être exécuté plusieurs fois, sans erreur et sans perte de données
+(`CREATE IF NOT EXISTS`, `DROP … IF EXISTS`, `CREATE OR REPLACE`, et `DROP FUNCTION` puis `CREATE`
+pour les RPC). Des `DROP FUNCTION IF EXISTS` précèdent les fonctions concernées : plus d'erreur
+*« cannot change name of input parameter »*, même sur une base ancienne.
 
 1. Allez dans **SQL Editor** sur Supabase
-2. Copiez le contenu de `supabase/consolidated_schema.sql`
-3. Exécutez le script
+2. Copiez **tout** le contenu de `supabase/INSTALL.sql`
+3. Cliquez sur **Run**
 4. Le script définit automatiquement le rôle `admin` pour `wlagbema@gmail.com`
+
+> 🛠️ Ce fichier est **généré** depuis `supabase/sources/` :
+> `npm run db:build` (régénérer) · `npm run db:check` (vérifier qu'il est à jour, exécuté en CI).
 
 ### 6. Déployer les Edge Functions (optionnel)
 
@@ -301,11 +309,12 @@ rewardly/
 │   ├── proxy.ts                # Middleware (protection des routes)
 │   └── globals.css             # Styles
 ├── supabase/
-│   ├── README.md               # 🗄️ Organisation du SQL (à lire en premier)
-│   ├── setup/                  # ⭐ SQL canonique GÉNÉRÉ (00_full_setup.sql)
-│   ├── migrations/             # Historique 00001→00022 (référence)
-│   ├── legacy/                 # Anciens fichiers non canoniques (ne pas exécuter)
-│   ├── tools/                  # Scripts d'exploitation (reset, load test…)
+│   ├── INSTALL.sql             # ⭐ LE SEUL FICHIER SQL À EXÉCUTER (tout-en-un)
+│   ├── README.md               # 🗄️ Mode d'emploi (1 fichier, 1 clic)
+│   ├── sources/                # Matière première du générateur (ne pas exécuter)
+│   │   ├── base_schema.sql
+│   │   └── migrations/         # 00001 → 00022 (historique)
+│   ├── tools/                  # Outils d'admin (reset, plans/catégories)
 │   └── functions/              # Edge Functions Deno
 └── public/                     # Static assets
 ```
@@ -332,7 +341,7 @@ rewardly/
 > passent par des RPC SQL `SECURITY DEFINER` (`credit_feeexpay_deposit`,
 > `request_withdrawal_feeexpay`) avec verrou de ligne `SELECT … FOR UPDATE`.
 > Le montant retirable est limité aux **gains** (jamais les dépôts ni le capital).
-> Migration requise : `supabase/migrations/00015_referral_atomic_wallet.sql`.
+> Migration requise : incluse dans `supabase/INSTALL.sql` (fichier unique à exécuter).
 
 ## 📄 License
 
