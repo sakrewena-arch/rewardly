@@ -28,6 +28,9 @@ jobs:
       - name: TypeScript typecheck
         run: npx tsc --noEmit
 
+      - name: Vérifier le SQL canonique (supabase/setup)
+        run: npm run db:check
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest

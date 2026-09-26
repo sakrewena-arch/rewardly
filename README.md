@@ -11,7 +11,7 @@
 - Système de packs (Bronze, Silver, Gold)
 - Tâches rémunérées avec validation auto/manuelle
 - Dépôts et retraits
-- Parrainage avec code et lien de parrainage
+- Parrainage avec code et lien de parrainage (**10 % de l'investissement** de chaque filleul)
 - Notifications en temps réel (compteur non-lues)
 - Notifications de rappel automatiques (tâches du jour, upgrade de plan, dépôts en attente)
 - Popup de bienvenue avec téléchargement direct selon la plateforme détectée (Android/Windows/Linux/macOS)
@@ -301,9 +301,12 @@ rewardly/
 │   ├── proxy.ts                # Middleware (protection des routes)
 │   └── globals.css             # Styles
 ├── supabase/
-│   ├── consolidated_schema.sql # ⭐ SQL complet (idempotent)
-│   ├── functions/              # Edge Functions Deno
-│   └── migrations/             # Anciennes migrations (référence)
+│   ├── README.md               # 🗄️ Organisation du SQL (à lire en premier)
+│   ├── setup/                  # ⭐ SQL canonique GÉNÉRÉ (00_full_setup.sql)
+│   ├── migrations/             # Historique 00001→00022 (référence)
+│   ├── legacy/                 # Anciens fichiers non canoniques (ne pas exécuter)
+│   ├── tools/                  # Scripts d'exploitation (reset, load test…)
+│   └── functions/              # Edge Functions Deno
 └── public/                     # Static assets
 ```
 
