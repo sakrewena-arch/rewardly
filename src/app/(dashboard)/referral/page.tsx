@@ -17,6 +17,8 @@ export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
   const [referrals, setReferrals] = useState<any[]>([]);
   const [totalCommission, setTotalCommission] = useState(0);
+  // Pourcentage de commission sur l'investissement du filleul (system_settings)
+  const [percent, setPercent] = useState(10);
 
   useEffect(() => {
     const supabase = createClient();
@@ -24,6 +26,16 @@ export default function ReferralPage() {
 
     const fetchReferrals = async () => {
       if (!user) return;
+      // Pourcentage de commission configuré (10 % par défaut)
+      const { data: settingsData } = await supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", "referral_commission_percent")
+        .maybeSingle();
+      const configuredPercent =
+        Number(String(settingsData?.value ?? 10).replace(/"/g, "")) || 10;
+      setPercent(configuredPercent);
+
       const { data: refData } = await supabase
         .from("referrals")
         .select("id, referred_id, commission, status, created_at")
@@ -109,7 +121,9 @@ export default function ReferralPage() {
             </div>
             <div>
               <h2 className="font-bold text-lg">Programme de parrainage</h2>
-              <p className="text-white/70 text-sm">Gagnez des commissions sur vos filleuls</p>
+              <p className="text-white/70 text-sm">
+                {percent} % de l&apos;investissement de chaque filleul
+              </p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">

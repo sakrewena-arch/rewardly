@@ -37,7 +37,7 @@ const knowledgeBase: { keywords: string[]; answer: string }[] = [
   },
   {
     keywords: ["parrain", "parrainage", "filleul", "inviter", "referral"],
-    answer: "🤝 Le parrainage :\n1. Partagez votre code de parrainage (dans l'onglet 'Parrainage')\n2. Quand quelqu'un s'inscrit avec votre code, vous gagnez une commission\n3. Vous pouvez aussi partager votre QR code\n4. Plus vous parrainez, plus vous gagnez !",
+    answer: "🤝 Le parrainage :\n1. Partagez votre code de parrainage (dans l'onglet 'Parrainage')\n2. Quand quelqu'un s'inscrit avec votre code, il devient votre filleul\n3. Vous touchez 10 % du montant qu'il investit (rien s'il n'investit pas)\n4. Vous pouvez aussi partager votre QR code\n5. Plus vous parrainez, plus vous gagnez !",
   },
   {
     keywords: ["solde", "balance", "wallet", "compte"],

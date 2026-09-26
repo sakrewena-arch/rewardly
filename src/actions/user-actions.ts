@@ -156,6 +156,13 @@ export async function markAllNotificationsRead() {
 }
 
 // ============ REFERRAL CODE (apply after registration) ============
+//
+// ⚠️ AUCUN crédit immédiat ici.
+// Règle métier : le parrain touche `referral_commission_percent` %
+// (défaut 10%) du montant que son filleul INVESTIT réellement.
+// Le versement est fait côté base par :
+//   activate_plan() → credit_referral_commission()
+// (donc jamais si le filleul n'investit pas).
 
 export async function applyReferralCodeAction(code: string) {
   const user = await getCurrentUser();
@@ -184,56 +191,38 @@ export async function applyReferralCodeAction(code: string) {
 
   const { data: referrer } = await adminClient
     .from("profiles")
-    .select("user_id, referral_code")
+    .select("id, user_id, referral_code")
     .eq("referral_code", trimmedCode)
     .maybeSingle();
 
   if (!referrer) return { success: false, error: "Code de parrainage invalide" };
   if (referrer.user_id === user.id) return { success: false, error: "Vous ne pouvez pas vous parrainer vous-même" };
 
-  // 3. Lire la commission fixe depuis system_settings
+  // 3. Pourcentage configuré (affiché à l'utilisateur)
   const { data: settings } = await adminClient
     .from("system_settings")
     .select("value")
-    .eq("key", "referral_commission_fixed")
+    .eq("key", "referral_commission_percent")
     .maybeSingle();
-  const commission = Number(settings?.value || 500);
+  const percent = Number(String(settings?.value ?? 10).replace(/"/g, "")) || 10;
 
-  // 4. Créer la relation de parrainage
+  // 4. Enregistrer la relation de parrainage UNIQUEMENT (0 FCFA).
+  //    La commission sera versée par activate_plan() quand le filleul investira.
   const { error: refError } = await adminClient.from("referrals").insert({
     referrer_id: referrer.user_id,
     referred_id: user.id,
-    commission,
-    status: "paid",
+    commission: 0,
+    status: "pending",
   });
   if (refError) return { success: false, error: refError.message };
 
-  // 5. Créditer la commission au parrain (wallet + transaction)
-  const { data: wallet } = await adminClient
-    .from("wallets")
-    .select("*")
-    .eq("user_id", referrer.user_id)
-    .maybeSingle();
-  if (wallet) {
-    await adminClient
-      .from("wallets")
-      .update({
-        balance: (wallet.balance || 0) + commission,
-        total_earnings: (wallet.total_earnings || 0) + commission,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", referrer.user_id);
-    await adminClient.from("wallet_transactions").insert({
-      user_id: referrer.user_id,
-      wallet_id: wallet.id,
-      amount: commission,
-      type: "reward",
-      description: `Commission de parrainage (${trimmedCode})`,
-      status: "completed",
-    });
-  }
+  // 5. Mémoriser le parrain sur le profil (cohérence avec l'inscription via lien)
+  await adminClient
+    .from("profiles")
+    .update({ referred_by: referrer.id, updated_at: new Date().toISOString() })
+    .eq("user_id", user.id);
 
   revalidatePath("/profile");
   revalidatePath("/referral");
-  return { success: true, commission };
+  return { success: true, percent };
 }

@@ -49,23 +49,31 @@ export default function ProfilePage() {
         .select("referrer_id")
         .eq("referred_id", user.id)
         .maybeSingle();
+      // `referrals.referrer_id` = auth.users.id, alors que `profiles.referred_by`
+      // = profiles.id : on conserve la colonne de recherche correspondante.
+      let lookupColumn: "id" | "user_id" = "user_id";
+
       if (ref?.referrer_id) {
         referrerId = ref.referrer_id;
+        lookupColumn = "user_id";
       } else {
-        // 2. Fallback : profil de l'utilisateur → referred_by
+        // Fallback : profil de l'utilisateur → referred_by (profiles.id)
         const { data: myProfile } = await supabase
           .from("profiles")
           .select("referred_by")
           .eq("user_id", user.id)
           .maybeSingle();
-        if (myProfile?.referred_by) referrerId = myProfile.referred_by;
+        if (myProfile?.referred_by) {
+          referrerId = myProfile.referred_by;
+          lookupColumn = "id";
+        }
       }
 
       if (referrerId) {
         const { data: refProfile } = await supabase
           .from("profiles")
           .select("full_name, username, referral_code")
-          .eq("user_id", referrerId)
+          .eq(lookupColumn, referrerId)
           .maybeSingle();
         setReferrer(refProfile);
       }
@@ -79,7 +87,9 @@ export default function ProfilePage() {
     setReferralMsg(null);
     const result = await applyReferralCodeAction(referralCode);
     if (result?.success) {
-      setReferralMsg(`Code appliqué ! Votre parrain a reçu ${formatCurrency(result.commission || 0)}.`);
+      setReferralMsg(
+        `Code appliqué ✓ Votre parrain touchera ${result.percent ?? 10} % du montant que vous investirez.`
+      );
       setReferralCode("");
       // Recharger le parrain
       const supabase = createClient();

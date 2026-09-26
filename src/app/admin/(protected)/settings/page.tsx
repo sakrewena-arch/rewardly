@@ -18,8 +18,8 @@ export default function AdminSettingsPage() {
     min_withdrawal: "5000",
     withdrawal_day: "5",
     investment_duration_days: "7",
-    referral_commission_fixed: "500",
-    referral_commission_percent: "5",
+    referral_commission_fixed: "0",
+    referral_commission_percent: "10",
     max_referrals: "50",
     maintenance_mode: "false",
   });
@@ -32,8 +32,8 @@ export default function AdminSettingsPage() {
           min_withdrawal: String(data.min_withdrawal || "5000").replace(/"/g, ""),
           withdrawal_day: String(data.withdrawal_day || "5").replace(/"/g, ""),
           investment_duration_days: String(data.investment_duration_days || "7").replace(/"/g, ""),
-          referral_commission_fixed: String(data.referral_commission_fixed || "500").replace(/"/g, ""),
-          referral_commission_percent: String(data.referral_commission_percent || "5").replace(/"/g, ""),
+          referral_commission_fixed: String(data.referral_commission_fixed || "0").replace(/"/g, ""),
+          referral_commission_percent: String(data.referral_commission_percent || "10").replace(/"/g, ""),
           max_referrals: String(data.max_referrals || "50").replace(/"/g, ""),
           maintenance_mode: String(data.maintenance_mode || "false").replace(/"/g, ""),
         });
@@ -119,11 +119,11 @@ export default function AdminSettingsPage() {
                 <h2 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Parrainage</h2>
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-xs text-[#8A8A8A]">Commission fixe (FCFA)</label>
+                    <label className="text-xs text-[#8A8A8A]">Commission fixe (FCFA) — obsolète, non utilisée</label>
                     <Input value={settings.referral_commission_fixed} onChange={(e) => setSettings({ ...settings, referral_commission_fixed: e.target.value })} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs text-[#8A8A8A]">Commission (%)</label>
+                    <label className="text-xs text-[#8A8A8A]">Commission parrainage (% de l&apos;investissement du filleul)</label>
                     <Input value={settings.referral_commission_percent} onChange={(e) => setSettings({ ...settings, referral_commission_percent: e.target.value })} />
                   </div>
                   <div className="space-y-1">
