@@ -29,6 +29,7 @@ individuellement — utilisez le fichier unique
 | 00020 | `ensure_wallet_columns.sql` | colonnes wallet garanties |
 | 00021 | `fix_upgrade_and_referrals.sql` | upgrade de pack + parrainage |
 | 00022 | `referral_investment_commission.sql` | **parrainage = 10 % de l'investissement** |
+| 00023 | `restore_default_plans.sql` | **rétablit/active les packs** Bronze, Silver, Gold (et les catégories de tâches) |
 
 ## Ajouter une migration
 
