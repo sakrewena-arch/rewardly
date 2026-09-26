@@ -174,3 +174,32 @@
 html {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* ============================================================
+   IMPRESSION — AFFICHE PUBLICITAIRE (/affiche)
+   L'affiche doit sortir seule, en portrait, sans les boutons.
+   ============================================================ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-poster {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    /* Compresse l'affiche pour qu'elle tienne sur UNE page A4 portrait */
+    zoom: 0.72;
+    /* Conserve les couleurs de fond à l'impression */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
