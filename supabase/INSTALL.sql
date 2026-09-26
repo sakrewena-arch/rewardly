@@ -761,195 +761,6 @@ VALUES
   ('00000000-0000-0000-0000-000000000001', 'system-user@rewardly.local', '{"full_name": "System User"}'::jsonb, NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
 
--- [supabase/sources/migrations/00006_cleanup_data.sql:1]
--- Rewardly Cleanup Data
--- Migration 00006: Clean all existing demo/system data
--- Requirement: "efface les données des comptes existants et supprime les comptes"
-
--- ============================================
--- DELETE ALL EXISTING DATA (order matters for FK)
--- ============================================
-DELETE FROM submission_answers;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:9]
-DELETE FROM submission_fields;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:10]
-DELETE FROM task_submissions;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:11]
-DELETE FROM tasks;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:12]
-DELETE FROM task_categories;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:13]
-DELETE FROM deposits;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:14]
-DELETE FROM withdrawals;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:15]
-DELETE FROM wallet_transactions;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:16]
-DELETE FROM investments;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:17]
-DELETE FROM referrals;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:18]
-DELETE FROM notifications;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:19]
-DELETE FROM admin_logs;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:20]
-DELETE FROM daily_statistics;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:21]
-DELETE FROM wallets;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:22]
-DELETE FROM profiles;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:22]
--- Delete system users from auth.users (except the authenticated users)
-DELETE FROM auth.users WHERE id IN (
-  '00000000-0000-0000-0000-000000000000',
-  '00000000-0000-0000-0000-000000000001'
-);
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:22]
--- Keep plans, system_settings, payment_methods, banners, announcements
--- (these are platform configuration, not user data)
-
--- ============================================
--- RESTORE FK CONSTRAINTS TO auth.users
--- (re-enable security now that we're back to authentication)
--- ============================================
-
--- Helper macro-style blocks (PostgreSQL does not support IF NOT EXISTS on ADD CONSTRAINT)
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_user_id_fkey') THEN
-    ALTER TABLE profiles ADD CONSTRAINT profiles_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:47]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wallets_user_id_fkey') THEN
-    ALTER TABLE wallets ADD CONSTRAINT wallets_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:54]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wallet_transactions_user_id_fkey') THEN
-    ALTER TABLE wallet_transactions ADD CONSTRAINT wallet_transactions_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:61]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'task_submissions_user_id_fkey') THEN
-    ALTER TABLE task_submissions ADD CONSTRAINT task_submissions_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:68]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'task_submissions_reviewed_by_fkey') THEN
-    ALTER TABLE task_submissions ADD CONSTRAINT task_submissions_reviewed_by_fkey
-      FOREIGN KEY (reviewed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:75]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'deposits_user_id_fkey') THEN
-    ALTER TABLE deposits ADD CONSTRAINT deposits_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:82]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'deposits_reviewed_by_fkey') THEN
-    ALTER TABLE deposits ADD CONSTRAINT deposits_reviewed_by_fkey
-      FOREIGN KEY (reviewed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:89]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'withdrawals_user_id_fkey') THEN
-    ALTER TABLE withdrawals ADD CONSTRAINT withdrawals_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:96]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'withdrawals_reviewed_by_fkey') THEN
-    ALTER TABLE withdrawals ADD CONSTRAINT withdrawals_reviewed_by_fkey
-      FOREIGN KEY (reviewed_by) REFERENCES auth.users(id) ON DELETE SET NULL;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:103]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'notifications_user_id_fkey') THEN
-    ALTER TABLE notifications ADD CONSTRAINT notifications_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:110]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'investments_user_id_fkey') THEN
-    ALTER TABLE investments ADD CONSTRAINT investments_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:117]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_logs_admin_id_fkey') THEN
-    ALTER TABLE admin_logs ADD CONSTRAINT admin_logs_admin_id_fkey
-      FOREIGN KEY (admin_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:124]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'referrals_referrer_id_fkey') THEN
-    ALTER TABLE referrals ADD CONSTRAINT referrals_referrer_id_fkey
-      FOREIGN KEY (referrer_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:131]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'referrals_referred_id_fkey') THEN
-    ALTER TABLE referrals ADD CONSTRAINT referrals_referred_id_fkey
-      FOREIGN KEY (referred_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
--- [supabase/sources/migrations/00006_cleanup_data.sql:138]
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'daily_statistics_user_id_fkey') THEN
-    ALTER TABLE daily_statistics ADD CONSTRAINT daily_statistics_user_id_fkey
-      FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
-  END IF;
-END $$;
-
 -- [supabase/sources/migrations/00009_feexpay_integration.sql:1]
 -- ============================================================
 -- MIGRATION : Intégration FeeXPay
@@ -1347,6 +1158,59 @@ WHERE NOT EXISTS (SELECT 1 FROM public.task_categories c WHERE c.slug = v.slug)
 SELECT slug, name, price, daily_tasks, is_active
 FROM public.plans
 ORDER BY sort_order, name;
+
+-- [supabase/sources/migrations/00024_ensure_profiles_wallets.sql:1]
+-- ============================================================
+-- MIGRATION 00024 : GARANTIR UN PROFIL ET UN WALLET POUR CHAQUE COMPTE
+-- ============================================================
+-- POURQUOI
+--   Un compte Supabase (auth.users) peut exister SANS ligne dans
+--   `profiles` (ou sans `wallets`) — par exemple après l'exécution d'un
+--   ancien script de nettoyage, ou si le trigger d'inscription n'a pas pu
+--   s'exécuter. Conséquences dans l'application :
+--     • connexion impossible / profil vide ;
+--     • vérification du rôle admin KO → « Ce compte n'est pas autorisé à
+--       accéder à l'administration » ;
+--     • aucun portefeuille affiché.
+--
+-- CE QUE FAIT CE SCRIPT (idempotent, NON destructif : aucune suppression)
+--   1. crée le profil manquant de chaque compte existant (role = 'user') ;
+--   2. crée le wallet manquant de chaque compte existant.
+--   Le profil admin est ensuite rétabli par le seed « SET ADMIN ROLE »
+--   (email configuré dans supabase/sources/base_schema.sql).
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 1. Profils manquants (code de parrainage unique calculé sans dépendance)
+-- ------------------------------------------------------------
+INSERT INTO public.profiles (user_id, full_name, username, role, referral_code, is_active, is_banned)
+SELECT
+  u.id,
+  COALESCE(NULLIF(u.raw_user_meta_data ->> 'full_name', ''), 'Utilisateur'),
+  NULL,
+  'user',
+  UPPER(SUBSTRING(MD5(u.id::TEXT || 'rewardly') FROM 1 FOR 8)),
+  true,
+  false
+FROM auth.users u
+WHERE NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = u.id);
+
+-- [supabase/sources/migrations/00024_ensure_profiles_wallets.sql:1]
+-- ------------------------------------------------------------
+-- 2. Wallets manquants
+-- ------------------------------------------------------------
+INSERT INTO public.wallets (user_id, balance, invested_capital, total_earnings, locked_amount)
+SELECT u.id, 0, 0, 0, 0
+FROM auth.users u
+WHERE NOT EXISTS (SELECT 1 FROM public.wallets w WHERE w.user_id = u.id);
+
+-- [supabase/sources/migrations/00024_ensure_profiles_wallets.sql:1]
+-- ------------------------------------------------------------
+-- 3. Contrôle : comptes sans profil (doit renvoyer 0 ligne)
+-- ------------------------------------------------------------
+SELECT u.email AS compte_sans_profil
+FROM auth.users u
+WHERE NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = u.id);
 
 /* ======================================================================
  * §2 — FONCTIONS (34)

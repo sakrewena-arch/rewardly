@@ -330,6 +330,26 @@ if (functions.size < 20) {
 }
 
 // ------------------------------------------------------------
+// 4bis. GARDE-FOU : aucune instruction DESTRUCTIVE dans INSTALL.sql
+// ------------------------------------------------------------
+// Un script historique de « nettoyage » (DELETE FROM profiles / wallets …)
+// ne doit JAMAIS se retrouver dans le fichier d'installation : il
+// supprimerait les comptes et les soldes en production.
+const destructive = schemaStmts.filter((s) =>
+  /^(DELETE\s+FROM|TRUNCATE\b|DROP\s+TABLE|DROP\s+SCHEMA|ALTER\s+TABLE\s+\S+\s+DROP\s+COLUMN)/i.test(
+    stripLeadingComments(s.stmt)
+  )
+);
+if (destructive.length) {
+  console.error("✗ Instruction(s) DESTRUCTIVE(S) détectée(s) — génération REFUSÉE :");
+  destructive.forEach((d) =>
+    console.error(`   - ${d.file}:${d.line} → ${stripLeadingComments(d.stmt).slice(0, 70)}…`)
+  );
+  console.error("  → déplacez ces scripts dans supabase/tools/ (jamais inclus dans INSTALL.sql).");
+  process.exit(1);
+}
+
+// ------------------------------------------------------------
 // 5. Durcissement : aucun client anonyme sur les RPC sensibles
 // ------------------------------------------------------------
 const hardening = [];
