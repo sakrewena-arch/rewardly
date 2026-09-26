@@ -366,12 +366,43 @@ for (const name of NO_ANON) {
 // ------------------------------------------------------------
 mkdirSync(SUPABASE, { recursive: true });
 
-// Anti-erreur « cannot change name of input parameter » : les RPC AVEC
-// paramètres sont supprimées avant recréation (aucune policy RLS ne dépend
-// d'une RPC — contrairement aux helpers sans argument, laissés en REPLACE).
-const fnDrops = [...functions.entries()]
+// Anti-erreur « Could not choose the best candidate function » (PostgREST) :
+// on supprime TOUTES les surcharges existantes des fonctions AVEC paramètres.
+// Une ancienne signature (ex. create_task avec p_amount_label) qui traîne en
+// base rend sinon l'appel ambigu. Les helpers sans paramètre (is_admin,
+// is_staff, triggers…) ne sont PAS touchés : des policies RLS en dépendent.
+const rpcNames = [...functions.entries()]
   .filter(([, f]) => typesSig(stripLeadingComments(f.stmt)) !== "")
-  .map(([name, f]) => `DROP FUNCTION IF EXISTS public.${name}(${typesSig(stripLeadingComments(f.stmt))});`);
+  .map(([name]) => name);
+
+const fnDrops = rpcNames.length
+  ? [
+      "-- Suppression des éventuelles ANCIENNES surcharges des RPC (idempotent).",
+      "-- Sans cela : « Could not choose the best candidate function ».",
+      "DO $$",
+      "DECLARE",
+      "  v_name text;",
+      "  r      record;",
+      "BEGIN",
+      "  FOREACH v_name IN ARRAY ARRAY[",
+      rpcNames.map((n) => `    '${n}'`).join(",\n"),
+      "  ] LOOP",
+      "    FOR r IN",
+      "      SELECT p.oid::regprocedure::text AS sig",
+      "      FROM pg_proc p",
+      "      JOIN pg_namespace n ON n.oid = p.pronamespace",
+      "      WHERE n.nspname = 'public' AND p.proname = v_name",
+      "    LOOP",
+      "      BEGIN",
+      "        EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig;",
+      "      EXCEPTION WHEN OTHERS THEN",
+      "        RAISE NOTICE 'Conservation de % (dépendances) : %', r.sig, SQLERRM;",
+      "      END;",
+      "    END LOOP;",
+      "  END LOOP;",
+      "END $$;",
+    ].join("\n")
+  : "";
 
 const schemaBody = schemaStmts
   .map((s) => `-- [${s.file}:${s.line}]\n${sanitizeComments(s.stmt)}`)
@@ -392,7 +423,7 @@ const privBody = privileges.map((p) => `-- [${p.file}:${p.line}]\n${sanitizeComm
 
 const out = {
   "§1 — SCHÉMA (tables, index, types, seeds, stockage)": schemaBody,
-  [`§2 — FONCTIONS (${functions.size})`]: `${fnDrops.join("\n")}\n\n${fnBody}`,
+  [`§2 — FONCTIONS (${functions.size})`]: `${fnDrops}\n\n${fnBody}`,
   [`§3 — TRIGGERS (${triggers.size}) + RLS (${policies.size} policies)`]: `${trigBody}\n\n${polBody}`,
   "§4 — PRIVILÈGES (GRANT/REVOKE + durcissement)": `${privBody}\n\n${hardening.join("\n")}`,
 };
@@ -567,7 +598,7 @@ console.log(`Policies RLS        : ${policies.size}  (ignorées : ${dropped.poli
 console.log(`GRANT/REVOKE        : ${privileges.length}  (doublons ignorés : ${dropped.privileges})`);
 console.log(`Instructions schéma : ${schemaStmts.length}  (doublons ignorés : ${dropped.schema})`);
 console.log(`Gardes admin        : ${guardOk.length}/${ADMIN_RPCS.length}`);
-console.log(`DROP FUNCTION (RPC) : ${fnDrops.length}`);
+console.log(`RPC protégées (surcharges nettoyées) : ${rpcNames.length}`);
 console.log(`REVOKE de durcissement : ${hardening.length}`);
 console.log(`Références validées : OK (tables, fonctions, signatures)`);
 if (dropFunctionStmts.length) {

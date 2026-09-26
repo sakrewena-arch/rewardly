@@ -1216,30 +1216,53 @@ WHERE NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.user_id = u.id);
  * §2 — FONCTIONS (34)
  * ====================================================================== */
 
-DROP FUNCTION IF EXISTS public.add_reward(uuid, decimal, text);
-DROP FUNCTION IF EXISTS public.submit_task(uuid, uuid, jsonb);
-DROP FUNCTION IF EXISTS public.approve_submission(uuid, uuid, text);
-DROP FUNCTION IF EXISTS public.reject_submission(uuid, uuid, text);
-DROP FUNCTION IF EXISTS public.validate_deposit(uuid, uuid, boolean, text);
-DROP FUNCTION IF EXISTS public.validate_withdrawal(uuid, uuid, text, text);
-DROP FUNCTION IF EXISTS public.ban_user(uuid, uuid, boolean);
-DROP FUNCTION IF EXISTS public.delete_user(uuid, uuid);
-DROP FUNCTION IF EXISTS public.activate_plan(uuid, uuid, decimal);
-DROP FUNCTION IF EXISTS public.create_task(uuid, text, text, decimal, uuid, uuid, text, integer, text, text, integer, integer, timestamptz, text, jsonb);
-DROP FUNCTION IF EXISTS public.update_task(uuid, uuid, text, text, decimal, uuid, text, integer, text, text, integer, integer, timestamptz, text, boolean);
-DROP FUNCTION IF EXISTS public.delete_task(uuid, uuid);
-DROP FUNCTION IF EXISTS public.create_plan(uuid, text, text, decimal, integer, decimal, decimal, text, text, text);
-DROP FUNCTION IF EXISTS public.toggle_plan_status(uuid, uuid, boolean);
-DROP FUNCTION IF EXISTS public.update_plan(uuid, uuid, text, decimal, integer, decimal, decimal, text, text, text);
-DROP FUNCTION IF EXISTS public.get_users_with_details(text);
-DROP FUNCTION IF EXISTS public.submit_withdrawal(uuid, decimal, text, text);
-DROP FUNCTION IF EXISTS public.submit_deposit(uuid, decimal, text, text, text);
-DROP FUNCTION IF EXISTS public.request_withdrawal_feeexpay(uuid, decimal, text, text, text);
-DROP FUNCTION IF EXISTS public.credit_feeexpay_deposit(text);
-DROP FUNCTION IF EXISTS public.get_withdrawable_amount(uuid);
-DROP FUNCTION IF EXISTS public.upsert_user_preferences(text, text, boolean, boolean);
-DROP FUNCTION IF EXISTS public.create_service_order(text, text, text, text, text, text, numeric, text, integer, text, text, text, text, text, text, text, text);
-DROP FUNCTION IF EXISTS public.credit_referral_commission(uuid, numeric, uuid);
+-- Suppression des éventuelles ANCIENNES surcharges des RPC (idempotent).
+-- Sans cela : « Could not choose the best candidate function ».
+DO $$
+DECLARE
+  v_name text;
+  r      record;
+BEGIN
+  FOREACH v_name IN ARRAY ARRAY[
+    'add_reward',
+    'submit_task',
+    'approve_submission',
+    'reject_submission',
+    'validate_deposit',
+    'validate_withdrawal',
+    'ban_user',
+    'delete_user',
+    'activate_plan',
+    'create_task',
+    'update_task',
+    'delete_task',
+    'create_plan',
+    'toggle_plan_status',
+    'update_plan',
+    'get_users_with_details',
+    'submit_withdrawal',
+    'submit_deposit',
+    'request_withdrawal_feeexpay',
+    'credit_feeexpay_deposit',
+    'get_withdrawable_amount',
+    'upsert_user_preferences',
+    'create_service_order',
+    'credit_referral_commission'
+  ] LOOP
+    FOR r IN
+      SELECT p.oid::regprocedure::text AS sig
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = v_name
+    LOOP
+      BEGIN
+        EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Conservation de % (dépendances) : %', r.sig, SQLERRM;
+      END;
+    END LOOP;
+  END LOOP;
+END $$;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:1]
 -- ============================================================
