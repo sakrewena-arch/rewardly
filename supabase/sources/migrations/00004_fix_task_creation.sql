@@ -46,7 +46,11 @@ ALTER TABLE daily_statistics DROP CONSTRAINT IF EXISTS daily_statistics_user_id_
 -- ============================================
 -- CREATE SYSTEM USERS IN auth.users (if not exists)
 -- ============================================
-INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
+-- ⚠️ Bloc protégé : si l'insertion directe dans auth.users est refusée
+-- (projet Supabase neuf), l'installation CONTINUE au lieu de s'interrompre.
+DO $$
+BEGIN
+  INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
 VALUES
   ('00000000-0000-0000-0000-000000000000', 'system-admin@rewardly.local', '{"full_name": "System Admin"}'::jsonb, NOW(), NOW()),
   ('00000000-0000-0000-0000-000000000001', 'system-user@rewardly.local', '{"full_name": "System User"}'::jsonb, NOW(), NOW())
@@ -64,6 +68,9 @@ VALUES
   ('00000000-0000-0000-0000-000000000000', 0, 0, 0, 0),
   ('00000000-0000-0000-0000-000000000001', 0, 0, 0, 0)
 ON CONFLICT (user_id) DO NOTHING;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'Comptes système non créés (sans conséquence) : %', SQLERRM;
+END $$;
 
 -- ============================================
 -- RECREATE create_task (protected admin_logs insert)

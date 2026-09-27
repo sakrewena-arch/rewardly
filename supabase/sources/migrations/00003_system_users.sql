@@ -5,46 +5,50 @@
 -- ============================================
 -- CREATE SYSTEM USERS
 -- ============================================
--- The trigger handle_new_user (from migration 00001)
--- will auto-create profiles and wallets for these users.
+-- ⚠️ Sur un projet Supabase NEUF, une insertion directe dans `auth.users` peut
+-- être refusée (colonnes obligatoires, règles internes d'Auth…). Ces comptes
+-- ne sont plus utilisés par l'application : on les englobe donc dans un bloc
+-- protégé — si l'insertion échoue, l'installation CONTINUE (simple NOTICE)
+-- au lieu de s'interrompre.
+DO $$
+BEGIN
+  -- System Admin
+  INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
+  VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    'system-admin@rewardly.local',
+    '{"full_name": "System Admin"}'::jsonb,
+    NOW(),
+    NOW()
+  )
+  ON CONFLICT (id) DO NOTHING;
 
--- System Admin (used by admin-actions.ts)
-INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
-VALUES (
-  '00000000-0000-0000-0000-000000000000',
-  'system-admin@rewardly.local',
-  '{"full_name": "System Admin"}'::jsonb,
-  NOW(),
-  NOW()
-)
-ON CONFLICT (id) DO NOTHING;
+  -- System User
+  INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
+  VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    'system-user@rewardly.local',
+    '{"full_name": "System User"}'::jsonb,
+    NOW(),
+    NOW()
+  )
+  ON CONFLICT (id) DO NOTHING;
 
--- System User (used by user-actions.ts)
-INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
-VALUES (
-  '00000000-0000-0000-0000-000000000001',
-  'system-user@rewardly.local',
-  '{"full_name": "System User"}'::jsonb,
-  NOW(),
-  NOW()
-)
-ON CONFLICT (id) DO NOTHING;
+  -- Profils et wallets associés
+  INSERT INTO profiles (user_id, full_name, username, role, referral_code)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', 'System Admin', 'system-admin', 'super_admin', 'SYSADMIN01'),
+    ('00000000-0000-0000-0000-000000000001', 'System User', 'system-user', 'user', 'SYSUSER01')
+  ON CONFLICT (user_id) DO NOTHING;
 
--- ============================================
--- ENSURE PROFILES AND WALLETS EXIST
--- (in case the trigger was already fired or doesn't run)
--- ============================================
-INSERT INTO profiles (user_id, full_name, username, role, referral_code)
-VALUES 
-  ('00000000-0000-0000-0000-000000000000', 'System Admin', 'system-admin', 'super_admin', 'SYSADMIN01'),
-  ('00000000-0000-0000-0000-000000000001', 'System User', 'system-user', 'user', 'SYSUSER01')
-ON CONFLICT (user_id) DO NOTHING;
-
-INSERT INTO wallets (user_id, balance, invested_capital, total_earnings, locked_amount)
-VALUES 
-  ('00000000-0000-0000-0000-000000000000', 0, 0, 0, 0),
-  ('00000000-0000-0000-0000-000000000001', 0, 0, 0, 0)
-ON CONFLICT (user_id) DO NOTHING;
+  INSERT INTO wallets (user_id, balance, invested_capital, total_earnings, locked_amount)
+  VALUES
+    ('00000000-0000-0000-0000-000000000000', 0, 0, 0, 0),
+    ('00000000-0000-0000-0000-000000000001', 0, 0, 0, 0)
+  ON CONFLICT (user_id) DO NOTHING;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'Comptes système non créés (sans conséquence) : %', SQLERRM;
+END $$;
 
 -- ============================================
 -- DROP FK CONSTRAINTS TO auth.users
