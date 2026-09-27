@@ -66,6 +66,14 @@ BEGIN
   SELECT id INTO v_wallet_id FROM public.wallets WHERE user_id = v_user_id;
   SELECT created_at INTO v_join FROM public.profiles WHERE user_id = v_user_id;
 
+  -- 🛡️ Si la date d'adhésion est absente ou RÉCENTE (compte créé aujourd'hui),
+  -- la boucle mensuelle ne générerait AUCUN historique. On retombe alors sur
+  -- 24 mois d'ancienneté (ou exécutez d'abord 02_date_adhesion.sql).
+  IF v_join IS NULL OR v_join > (now() - INTERVAL '3 months') THEN
+    RAISE NOTICE 'Date d''adhesion recente ou absente -> historique calcule sur 24 mois (lancez 02_date_adhesion.sql pour fixer la date).';
+    v_join := now() - INTERVAL '24 months';
+  END IF;
+
   -- ------------------------------------------------------------
   -- 0. Nettoyage des données de démonstration précédentes (les nôtres uniquement)
   -- ------------------------------------------------------------
@@ -93,13 +101,25 @@ BEGIN
     v_n := 2 + floor(random() * 2)::int;          -- 2 ou 3 retraits ce mois-ci
 
     FOR v_i IN 1..v_n LOOP
-      v_day  := 2 + floor(random() * 26)::int;    -- jour irrégulier (2 → 28)
+      -- Mois EN COURS : retraits placés dans les derniers jours pour qu'ils
+      -- apparaissent en haut de « Transactions récentes » (l'app n'affiche
+      -- que les 20 dernières transactions).
+      IF date_trunc('month', v_month) = date_trunc('month', now()) THEN
+        v_day := GREATEST(1, EXTRACT(DAY FROM now())::int - floor(random() * 6)::int);
+      ELSE
+        v_day := 2 + floor(random() * 26)::int;    -- jour irrégulier (2 → 28)
+      END IF;
+
       v_date := date_trunc('month', v_month)
                 + make_interval(days  => v_day - 1,
                                 hours => 8 + floor(random() * 12)::int,
                                 mins  => floor(random() * 60)::int);
 
-      CONTINUE WHEN v_date > now();                -- jamais dans le futur
+      -- Jamais dans le futur : on décale juste avant maintenant (au lieu
+      -- d'ignorer la ligne) pour garder un historique bien visible.
+      IF v_date > now() THEN
+        v_date := now() - make_interval(hours => 2 + floor(random() * 20)::int);
+      END IF;
 
       v_amount := 5000 + floor(random() * 17)::int * 500;   -- 5 000 → 13 000
       v_method := CASE WHEN random() < 0.6 THEN 'TOGOCOM TG' ELSE 'MOOV TG' END;
