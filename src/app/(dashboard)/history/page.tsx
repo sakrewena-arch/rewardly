@@ -36,7 +36,7 @@ interface HistoryItem {
 export default function HistoryPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { transactions, wallet } = useWallet();
+  const { transactions, wallet } = useWallet({ txLimit: 500 });
   const { submissions, completedToday } = useTasks();
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>("all");
   const [search, setSearch] = useState("");
@@ -268,14 +268,14 @@ export default function HistoryPage() {
                 </div>
               ) : (
                 <>
-                  {filteredItems.slice(0, showAllHistory ? filteredItems.length : 10).map((item, index) => {
+                  {filteredItems.slice(0, showAllHistory ? Math.min(filteredItems.length, 300) : 10).map((item, index) => {
                     const style = getItemStyle(item);
                     return (
                       <motion.div
                         key={item.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.02 }}
+                        transition={{ delay: Math.min(index, 12) * 0.02 }}
                       >
                         <Card>
                           <CardContent className="p-3">

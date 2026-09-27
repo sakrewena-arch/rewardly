@@ -27,7 +27,15 @@ interface Transaction {
   created_at: string;
 }
 
-export function useWallet() {
+/**
+ * Charge le portefeuille et les transactions de l'utilisateur connecté.
+ *
+ * @param options.txLimit Nombre de transactions récupérées (20 par défaut,
+ *   comme avant). La page « Historique » demande davantage (500) pour que
+ *   les retraits/dépôts plus anciens soient réellement consultables.
+ */
+export function useWallet(options?: { txLimit?: number }) {
+  const txLimit = options?.txLimit ?? 20;
   const { user } = useAuth();
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -58,7 +66,7 @@ export function useWallet() {
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(txLimit);
 
       if (txData) {
         setTransactions(txData as Transaction[]);
@@ -68,7 +76,7 @@ export function useWallet() {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, txLimit]);
 
   useEffect(() => {
     fetchWallet();
