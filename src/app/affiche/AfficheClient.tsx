@@ -26,14 +26,14 @@ import {
   Loader2,
   Smartphone,
 } from "lucide-react";
-import { FEEXPAY_COUNTRIES } from "@/lib/geo";
+import { PAYGATE_COUNTRIES } from "@/lib/geo";
 import { getAppBaseUrl, formatCurrency } from "@/lib/utils";
 
 /** Montant mis en avant sur l'affiche (illustration commerciale). */
 const MONTANT_AFFICHE = 508000;
 
-/** Pays supportés (drapeau + nom) — dérivés de la config FeeXPay. */
-const COUNTRIES = Object.values(FEEXPAY_COUNTRIES).map((c) => ({
+/** Pays supportés (drapeau + nom) — dérivés de la config PayGateGlobal. */
+const COUNTRIES = Object.values(PAYGATE_COUNTRIES).map((c) => ({
   code: c.code,
   flag: c.flag,
   name: c.name,
@@ -42,7 +42,7 @@ const COUNTRIES = Object.values(FEEXPAY_COUNTRIES).map((c) => ({
 /** Logos Mobile Money réellement proposés par la plateforme. */
 const MOMO_LOGOS = Array.from(
   new Set(
-    Object.values(FEEXPAY_COUNTRIES)
+    Object.values(PAYGATE_COUNTRIES)
       .flatMap((c) => c.paymentMethods)
       .filter((m) => m.type === "momo")
       .map((m) => m.logo)
@@ -57,7 +57,7 @@ const ETAPES = [
 
 const AVANTAGES = [
   { icon: Zap, titre: "Tâches simples", texte: "Quelques minutes par jour" },
-  { icon: Smartphone, titre: "Mobile Money", texte: "MTN • Moov • Wave • Orange" },
+  { icon: Smartphone, titre: "Mobile Money", texte: "Flooz • T-Money (Togo)" },
   { icon: Users, titre: "Parrainage 10 %", texte: "Sur les investissements de vos filleuls" },
   { icon: ShieldCheck, titre: "Paiements suivis", texte: "Chaque opération est tracée" },
 ];
@@ -316,7 +316,9 @@ export default function AfficheClient() {
             <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.04] p-4 sm:mt-8 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#F7CB57] sm:text-xs">
-                  Disponible dans {COUNTRIES.length} pays
+                  {COUNTRIES.length > 1
+                    ? `Disponible dans ${COUNTRIES.length} pays`
+                    : `Disponible au ${COUNTRIES[0]?.name ?? "Togo"}`}
                 </p>
                 <Wallet className="h-4 w-4 text-white/40" />
               </div>

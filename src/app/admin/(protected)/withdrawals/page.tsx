@@ -57,7 +57,7 @@ export default function AdminWithdrawalsPage() {
       if (result?.success === false) {
         setActionError(result.error || "Erreur lors de la validation");
       } else {
-        setActionSuccess(status === "paid" ? "Paiement envoyé avec succès !" : "Retrait rejeté, le montant a été remboursé.");
+        setActionSuccess(status === "paid" ? "Retrait marqué comme payé. Assurez-vous d'avoir versé le montant via PayGateGlobal (Flooz / T-Money)." : "Retrait rejeté, le montant a été remboursé.");
       }
       loadWithdrawals();
     } catch (e: any) {

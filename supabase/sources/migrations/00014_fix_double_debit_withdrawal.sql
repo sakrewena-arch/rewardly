@@ -1,7 +1,7 @@
 -- ============================================================
--- MIGRATION 00014 : CORRECTION DU DOUBLE DÉBIT DES RETRAITS FEEXPAY
+-- MIGRATION 00014 : CORRECTION DU DOUBLE DÉBIT DES RETRAITS PAYGATE
 -- ============================================================
--- Problème : /api/feexpay/payout débite le wallet À LA DEMANDE, puis
+-- Problème : /api/paygate/payout débite le wallet À LA DEMANDE, puis
 -- validate_withdrawal re-débitait le wallet au passage à 'paid'
 -- → l'utilisateur perdait 2× le montant.
 --
@@ -82,7 +82,7 @@ BEGIN
           AND type = 'withdrawal'
           AND status = 'pending'
           AND amount = -v_withdrawal.amount
-          AND (reference = v_withdrawal.id OR reference IS NULL)
+          AND (reference = v_withdrawal.id::TEXT OR reference IS NULL)
         ORDER BY created_at DESC
         LIMIT 1
       );
@@ -116,7 +116,7 @@ BEGIN
           AND type = 'withdrawal'
           AND status = 'pending'
           AND amount = -v_withdrawal.amount
-          AND (reference = v_withdrawal.id OR reference IS NULL)
+          AND (reference = v_withdrawal.id::TEXT OR reference IS NULL)
         ORDER BY created_at DESC
         LIMIT 1
       );

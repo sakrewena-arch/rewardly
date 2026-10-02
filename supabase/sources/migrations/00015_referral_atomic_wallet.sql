@@ -5,13 +5,13 @@
 -- 2. Inscription via lien (?ref=CODE) → le filleul est enregistré comme
 --    sous-affilié ET la commission du parrain est créditée IMMÉDIATEMENT
 --    (plus besoin de ressaisir le code après inscription).
--- 3. request_withdrawal_feeexpay : demande de retrait ATOMIQUE.
+-- 3. request_withdrawal_paygate : demande de retrait ATOMIQUE.
 --    Le montant est vérifié contre les GAINS retirables (jamais les dépôts
 --    ni le capital), puis le wallet est débité, la demande créée et la
 --    transaction enregistrée dans une SEULE transaction (SELECT FOR UPDATE).
---      → remplace le flux manuel /api/feexpay/payout (et son rollback bugué).
--- 4. credit_feeexpay_deposit : crédit de dépôt ATOMIQUE (anti double-crédit)
---    utilisé par /api/feexpay/deposit-status.
+--      → remplace le flux manuel /api/paygate/payout (et son rollback bugué).
+-- 4. credit_paygate_deposit : crédit de dépôt ATOMIQUE (anti double-crédit)
+--    utilisé par /api/paygate/deposit-status.
 -- Ces 2 RPC sont réservées au rôle service_role (revoked from PUBLIC/anon/authenticated).
 -- IDEMPOTENT : CREATE OR REPLACE / DROP IF EXISTS.
 -- ============================================================
@@ -132,9 +132,9 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.rewardly_handle_new_user();
 -- ============================================================
--- 3. RETRAIT FEEXPAY ATOMIQUE (limité aux GAINS — pas les dépôts/capital)
+-- 3. RETRAIT PAYGATE ATOMIQUE (limité aux GAINS — pas les dépôts/capital)
 -- ============================================================
-CREATE OR REPLACE FUNCTION public.request_withdrawal_feeexpay(
+CREATE OR REPLACE FUNCTION public.request_withdrawal_paygate(
   p_user_id uuid,
   p_amount numeric,
   p_method text,
@@ -211,15 +211,15 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM anon;
-REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) TO service_role;
+REVOKE ALL ON FUNCTION public.request_withdrawal_paygate(uuid, numeric, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.request_withdrawal_paygate(uuid, numeric, text, text, text) FROM anon;
+REVOKE ALL ON FUNCTION public.request_withdrawal_paygate(uuid, numeric, text, text, text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.request_withdrawal_paygate(uuid, numeric, text, text, text) TO service_role;
 
 -- ============================================================
--- 4. CRÉDIT DE DÉPÔT FEEXPAY ATOMIQUE (anti double-crédit)
+-- 4. CRÉDIT DE DÉPÔT PayGateGlobal ATOMIQUE (anti double-crédit)
 -- ============================================================
-CREATE OR REPLACE FUNCTION public.credit_feeexpay_deposit(
+CREATE OR REPLACE FUNCTION public.credit_paygate_deposit(
   p_reference text
 )
 RETURNS jsonb
@@ -277,7 +277,7 @@ BEGIN
 
   INSERT INTO public.wallet_transactions (user_id, wallet_id, amount, type, description, status, reference)
   VALUES (v_deposit.user_id, v_wallet.id, v_deposit.amount, 'deposit',
-          'Dépôt via FeeXPay (' || p_reference || ')', 'completed', p_reference);
+          'Dépôt via PayGateGlobal (' || p_reference || ')', 'completed', p_reference);
 
   INSERT INTO public.notifications (user_id, title, message, type)
   VALUES (v_deposit.user_id, 'Dépôt confirmé ✅',
@@ -287,7 +287,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM anon;
-REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.credit_feeexpay_deposit(text) TO service_role;
+REVOKE ALL ON FUNCTION public.credit_paygate_deposit(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.credit_paygate_deposit(text) FROM anon;
+REVOKE ALL ON FUNCTION public.credit_paygate_deposit(text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.credit_paygate_deposit(text) TO service_role;

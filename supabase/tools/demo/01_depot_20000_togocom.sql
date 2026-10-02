@@ -23,7 +23,7 @@ DECLARE
                              + INTERVAL '18 hours 47 minutes';   -- date/heure réaliste
   v_ref       text        := 'FXP-DEP-'
                              || to_char(CURRENT_DATE - INTERVAL '12 days', 'YYYYMMDD')
-                             || '-8HK4M2';                      -- référence type FeeXPay
+                             || '-8HK4M2';                      -- référence type PayGateGlobal
   -- ---------------------------------------------------------------
   v_user_id   uuid;
   v_wallet_id uuid;

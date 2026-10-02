@@ -15,7 +15,7 @@ export interface CountryInfo {
   currencySymbol: string;
 }
 
-// Réseaux de paiement FeeXPay
+// Réseaux de paiement PayGateGlobal (FLOOZ / TMONEY)
 export interface PaymentMethod {
   id: string;
   name: string;
@@ -69,75 +69,13 @@ const LOGOS = {
 };
 
 // ============================================================
-// CONFIGURATION DES PAYS FEEXPAY (selon docs.feexpay.me)
+// CONFIGURATION PAYS / MOYENS DE PAIEMENT — PayGateGlobal
+// PayGateGlobal ne prend en charge que le TOGO :
+//   • FLOOZ  → Moov Africa Togo
+//   • TMONEY → Togocom (Mixx by Yas)
+// Les codes opérateurs sont normalisés côté serveur par src/lib/paygate.ts.
 // ============================================================
-export const FEEXPAY_COUNTRIES: Record<string, CountryConfig> = {
-  BJ: {
-    code: "BJ",
-    name: "Bénin",
-    flag: "🇧🇯",
-    currency: "XOF",
-    currencySymbol: "FCFA",
-    phoneCode: "+229",
-    paymentMethods: [
-      { id: "mtn_benin", name: "MTN Bénin", code: "MTN", icon: "📱", logo: LOGOS.mtn, color: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "moov_benin", name: "Moov Bénin", code: "MOOV", icon: "📱", logo: LOGOS.moov, color: "bg-blue-100 dark:bg-blue-500/20 text-blue-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "celtiis_benin", name: "Celtiis", code: "CELTIIS BJ", icon: "📱", logo: LOGOS.celtiis, color: "bg-purple-100 dark:bg-purple-500/20 text-purple-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "coris_benin", name: "Coris", code: "CORIS", icon: "📱", logo: LOGOS.coris, color: "bg-green-100 dark:bg-green-500/20 text-green-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-    ],
-  },
-  BF: {
-    code: "BF",
-    name: "Burkina Faso",
-    flag: "🇧🇫",
-    currency: "XOF",
-    currencySymbol: "FCFA",
-    phoneCode: "+226",
-    paymentMethods: [
-      { id: "orange_bf", name: "Orange", code: "ORANGE BF", icon: "📱", logo: LOGOS.orange, color: "bg-orange-100 dark:bg-orange-500/20 text-orange-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "moov_bf", name: "Moov", code: "MOOV BF", icon: "📱", logo: LOGOS.moov, color: "bg-blue-100 dark:bg-blue-500/20 text-blue-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "wave_bf", name: "Wave", code: "WAVE BF", icon: "🌊", logo: LOGOS.wave, color: "bg-green-100 dark:bg-green-500/20 text-green-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-    ],
-  },
-  CI: {
-    code: "CI",
-    name: "Côte d'Ivoire",
-    flag: "🇨🇮",
-    currency: "XOF",
-    currencySymbol: "FCFA",
-    phoneCode: "+225",
-    paymentMethods: [
-      { id: "mtn_ci", name: "MTN", code: "MTN CI", icon: "📱", logo: LOGOS.mtn, color: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "moov_ci", name: "Moov", code: "MOOV CI", icon: "📱", logo: LOGOS.moov, color: "bg-blue-100 dark:bg-blue-500/20 text-blue-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "wave_ci", name: "Wave", code: "WAVE CI", icon: "🌊", logo: LOGOS.wave, color: "bg-green-100 dark:bg-green-500/20 text-green-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "orange_ci", name: "Orange", code: "ORANGE CI", icon: "📱", logo: LOGOS.orange, color: "bg-orange-100 dark:bg-orange-500/20 text-orange-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-    ],
-  },
-  ML: {
-    code: "ML",
-    name: "Mali",
-    flag: "🇲🇱",
-    currency: "XOF",
-    currencySymbol: "FCFA",
-    phoneCode: "+223",
-    paymentMethods: [
-      { id: "mobicash_ml", name: "Mobicash", code: "MOBICASH", icon: "📱", logo: LOGOS.mobicash, color: "bg-green-100 dark:bg-green-500/20 text-green-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "orange_ml", name: "Orange", code: "ORANGE ML", icon: "📱", logo: LOGOS.orange, color: "bg-orange-100 dark:bg-orange-500/20 text-orange-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-    ],
-  },
-  SN: {
-    code: "SN",
-    name: "Sénégal",
-    flag: "🇸🇳",
-    currency: "XOF",
-    currencySymbol: "FCFA",
-    phoneCode: "+221",
-    paymentMethods: [
-      { id: "orange_sn", name: "Orange", code: "ORANGE SN", icon: "📱", logo: LOGOS.orange, color: "bg-orange-100 dark:bg-orange-500/20 text-orange-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "wave_sn", name: "Wave", code: "WAVE SN", icon: "🌊", logo: LOGOS.wave, color: "bg-green-100 dark:bg-green-500/20 text-green-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "free_sn", name: "Free", code: "FREE SN", icon: "📱", logo: LOGOS.free, color: "bg-red-100 dark:bg-red-500/20 text-red-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-    ],
-  },
+export const PAYGATE_COUNTRIES: Record<string, CountryConfig> = {
   TG: {
     code: "TG",
     name: "Togo",
@@ -146,39 +84,13 @@ export const FEEXPAY_COUNTRIES: Record<string, CountryConfig> = {
     currencySymbol: "FCFA",
     phoneCode: "+228",
     paymentMethods: [
-      { id: "togocom_tg", name: "Mixx by Yas", code: "TOGOCOM TG", icon: "📱", logo: LOGOS.togocom, color: "bg-green-100 dark:bg-green-500/20 text-green-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "moov_tg", name: "Moov", code: "MOOV TG", icon: "📱", logo: LOGOS.moov, color: "bg-blue-100 dark:bg-blue-500/20 text-blue-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-    ],
-  },
-  CG: {
-    code: "CG",
-    name: "Congo Brazzaville",
-    flag: "🇨🇬",
-    currency: "XAF",
-    currencySymbol: "FCFA",
-    phoneCode: "+242",
-    paymentMethods: [
-      { id: "mtn_cg", name: "MTN", code: "MTN CG", icon: "📱", logo: LOGOS.mtn, color: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "visa_cg", name: "Carte Visa", code: "VISA", icon: "💳", logo: LOGOS.visa, color: "bg-purple-100 dark:bg-purple-500/20 text-purple-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "card" },
-      { id: "mastercard_cg", name: "Mastercard", code: "MC", icon: "💳", logo: LOGOS.mastercard, color: "bg-red-100 dark:bg-red-500/20 text-red-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "card" },
-    ],
-  },
-  CM: {
-    code: "CM",
-    name: "Cameroun",
-    flag: "🇨🇲",
-    currency: "XAF",
-    currencySymbol: "FCFA",
-    phoneCode: "+237",
-    paymentMethods: [
-      { id: "mtn_cm", name: "MTN", code: "MTN CM", icon: "📱", logo: LOGOS.mtn, color: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
-      { id: "orange_cm", name: "Orange", code: "ORANGE CM", icon: "📱", logo: LOGOS.orange, color: "bg-orange-100 dark:bg-orange-500/20 text-orange-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
+      { id: "flooz_tg", name: "Flooz (Moov)", code: "FLOOZ", icon: "📱", logo: LOGOS.moov, color: "bg-blue-100 dark:bg-blue-500/20 text-blue-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
+      { id: "tmoney_tg", name: "T-Money (Togocom)", code: "TMONEY", icon: "📱", logo: LOGOS.togocom, color: "bg-green-100 dark:bg-green-500/20 text-green-600", minAmount: 5000, maxAmount: 2000000, processingTime: "Instantané", type: "momo" },
     ],
   },
 };
-
-// Pays par défaut (si le pays n'est pas supporté)
-export const DEFAULT_COUNTRY: CountryConfig = FEEXPAY_COUNTRIES.CI;
+// Pays par défaut (PayGateGlobal : seul le Togo est supporté)
+export const DEFAULT_COUNTRY: CountryConfig = PAYGATE_COUNTRIES.TG;
 
 // ============================================================
 // DÉTECTION DU PAYS - Multi-API + persistance du choix manuel
@@ -283,7 +195,7 @@ export async function getDetectedCountry(): Promise<CountryInfo | null> {
 
 // Changer de pays manuellement
 export function setManualCountry(countryCode: string): CountryInfo | null {
-  const config = FEEXPAY_COUNTRIES[countryCode.toUpperCase()];
+  const config = PAYGATE_COUNTRIES[countryCode.toUpperCase()];
   if (!config) return null;
 
   const info: CountryInfo = {
@@ -320,8 +232,8 @@ export function getCurrencySymbol(currencyCode: string): string {
   return symbols[currencyCode] || currencyCode;
 }
 
-// Obtenir la configuration du pays pour FeeXPay
+// Obtenir la configuration du pays (PayGateGlobal = Togo uniquement)
 export function getCountryConfig(countryCode: string | null | undefined): CountryConfig {
   if (!countryCode) return DEFAULT_COUNTRY;
-  return FEEXPAY_COUNTRIES[countryCode.toUpperCase()] || DEFAULT_COUNTRY;
+  return PAYGATE_COUNTRIES[countryCode.toUpperCase()] || DEFAULT_COUNTRY;
 }

@@ -6,7 +6,7 @@
 -- Génère un historique crédible de membre actif :
 --   • 2 à 3 RETRAITS par mois, à des dates IRRÉGULIÈRES
 --     (montants variés 5 000 → 15 000 FCFA, arrondis à 1 000)
---   • vers TOGOCOM TG / MOOV TG sur des numéros togolais réalistes
+--   • vers Mixx By Yass / MOOV TG sur des numéros togolais réalistes
 --   • statut `paid` + transaction `withdrawal` complétée (négative)
 --   • 12 à 18 GAINS de tâches par mois pour justifier les retraits
 --     (descriptions réelles : visite de site, sondage, partage…)
@@ -122,7 +122,7 @@ BEGIN
       END IF;
 
       v_amount := 5000 + floor(random() * 17)::int * 500;   -- 5 000 → 13 000
-      v_method := CASE WHEN random() < 0.6 THEN 'TOGOCOM TG' ELSE 'MOOV TG' END;
+      v_method := CASE WHEN random() < 0.6 THEN 'Mixx By Yass' ELSE 'MOOV TG' END;
 
       -- numéro togolais réaliste (indicatif 228 + 8 chiffres : 90/91/79/70…)
       v_phone := '228'

@@ -10,7 +10,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { AuthRequired } from "@/components/features/AuthRequired";
-import { detectCountry, getDetectedCountry, getCountryConfig, setManualCountry, FEEXPAY_COUNTRIES, type CountryConfig, type PaymentMethod } from "@/lib/geo";
+import { getDetectedCountry, getCountryConfig, setManualCountry, PAYGATE_COUNTRIES, type CountryConfig, type PaymentMethod } from "@/lib/geo";
 
 const presetAmounts = [5000, 10000, 20000, 50000];
 
@@ -26,6 +26,7 @@ export default function DepositPage() {
   const [countryConfig, setCountryConfig] = useState<CountryConfig | null>(null);
   const [detecting, setDetecting] = useState(true);
   const [reference, setReference] = useState<string | null>(null);
+  const [creditedBalance, setCreditedBalance] = useState<number | null>(null);
   const [polling, setPolling] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [detectedCountry, setDetectedCountry] = useState<any>(null);
@@ -64,7 +65,7 @@ export default function DepositPage() {
     const checkStatus = async () => {
       attempts++;
       try {
-        const response = await fetch(`/api/feexpay/deposit-status?reference=${reference}`, {
+        const response = await fetch(`/api/paygate/deposit-status?reference=${reference}`, {
           headers: {
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
@@ -72,15 +73,17 @@ export default function DepositPage() {
         const data = await response.json();
         // Afficher le statut en temps réel
         // ⚠️ On n'affiche le succès QUE si le crédit côté serveur a réellement
-        // été effectué (credited === true). Si FeeXPay dit SUCCESSFUL mais que
-        // le crédit a échoué côté serveur, on le signale à l'utilisateur.
+        // été effectué (credited === true). Si PayGateGlobal dit SUCCESSFUL
+        // mais que le crédit a échoué côté serveur, on le signale.
         if (data.status === "SUCCESSFUL" && data.credited === true) {
           setPolling(false);
+          // Solde confirmé par le serveur (affiché en direct sur l'écran de succès)
+          if (typeof data.balance === "number") setCreditedBalance(data.balance);
           setStep(4);
           cancelled = true;
           return;
         } else if (data.status === "SUCCESSFUL" && !data.credited) {
-          // Paiement accepté par FeeXPay mais crédit serveur non confirmé :
+          // Paiement accepté par PayGateGlobal mais crédit serveur non confirmé :
           // l'utilisateur doit contacter le support (le dépôt est bien reçu).
           setPolling(false);
           setError(
@@ -91,7 +94,7 @@ export default function DepositPage() {
           return;
         } else if (data.status === "FAILED") {
           setPolling(false);
-          const reason = data.reason || data.responsemsg || data.message || "";
+          const reason = data.reason || data.message || "";
           // Traduire les raisons connues
           if (reason.includes("LOW_BALANCE") || reason.toLowerCase().includes("balance")) {
             setError("Solde insuffisant sur votre compte. Veuillez recharger votre compte opérateur et réessayer.");
@@ -136,9 +139,11 @@ export default function DepositPage() {
 
   const paymentMethods = countryConfig?.paymentMethods || [];
   const currencySymbol = countryConfig?.currencySymbol || "FCFA";
-  const phoneCode = countryConfig?.phoneCode || "+225";
+  const phoneCode = countryConfig?.phoneCode || "+228";
+  /** Pays proposés (PayGateGlobal : le Togo uniquement). */
+  const availableCountries = Object.values(PAYGATE_COUNTRIES);
 
-  // Initier le dépôt FeeXPay
+  // Initier le dépôt PayGateGlobal
   const handleInitiateDeposit = async () => {
     if (!selectedMethod || !phoneNumber || !amount) return;
     setError(null);
@@ -149,7 +154,7 @@ export default function DepositPage() {
     }
     setSubmitting(true);
     try {
-      const response = await fetch("/api/feexpay/deposit", {
+      const response = await fetch("/api/paygate/deposit", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -203,13 +208,15 @@ export default function DepositPage() {
                 Pays : <strong>{countryConfig.flag} {countryConfig.name}</strong> — {currencySymbol}
               </span>
             </div>
-            <button
-              onClick={() => setShowCountryPicker(!showCountryPicker)}
-              className="text-xs font-medium text-purple-600 hover:text-purple-700 flex items-center gap-1"
-            >
-              <ChevronDown className={`w-3 h-3 transition-transform ${showCountryPicker ? "rotate-180" : ""}`} />
-              Changer
-            </button>
+            {availableCountries.length > 1 && (
+              <button
+                onClick={() => setShowCountryPicker(!showCountryPicker)}
+                className="text-xs font-medium text-purple-600 hover:text-purple-700 flex items-center gap-1"
+              >
+                <ChevronDown className={`w-3 h-3 transition-transform ${showCountryPicker ? "rotate-180" : ""}`} />
+                Changer
+              </button>
+            )}
           </div>
 
           {/* Sélecteur de pays */}
@@ -220,7 +227,7 @@ export default function DepositPage() {
                 <p className="text-xs text-[#8A8A8A] mt-0.5">Si la détection est incorrecte ou si vous utilisez un VPN</p>
               </div>
               <div className="max-h-64 overflow-y-auto">
-                {Object.values(FEEXPAY_COUNTRIES).map((country) => (
+                {availableCountries.map((country) => (
                   <button
                     key={country.code}
                     onClick={() => handleChangeCountry(country.code)}
@@ -408,9 +415,17 @@ export default function DepositPage() {
             <Check className="w-10 h-10 text-green-500" />
           </div>
           <h2 className="text-xl font-bold mb-2">Dépôt confirmé !</h2>
-          <p className="text-[#8A8A8A] text-sm mb-6">
+          <p className="text-[#8A8A8A] text-sm mb-4">
             Votre compte a été crédité de {formatCurrency(Number(amount))} {currencySymbol} automatiquement.
           </p>
+          {creditedBalance !== null && (
+            <div className="mb-6 rounded-2xl bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 p-4">
+              <p className="text-xs text-[#8A8A8A]">Nouveau solde de votre compte</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                {formatCurrency(creditedBalance)} {currencySymbol}
+              </p>
+            </div>
+          )}
           <Button onClick={() => router.push("/dashboard")} className="w-full">
             Retour à l'accueil
           </Button>

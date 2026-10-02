@@ -98,7 +98,12 @@ export async function getWithdrawals() {
   return withdrawals || [];
 }
 
-export async function validateWithdrawalAction(withdrawalId: string, status: string, comment?: string) {
+export async function validateWithdrawalAction(
+  withdrawalId: string,
+  status: string,
+  comment?: string,
+  paygateTxReference?: string
+) {
   const admin = await requireAdmin();
   if (!admin) return { success: false, error: "Non autorisé" };
   // Utiliser le client admin (service role) pour contourner les problèmes de session
@@ -122,68 +127,35 @@ export async function validateWithdrawalAction(withdrawalId: string, status: str
     return { success: false, error: `Ce retrait est déjà ${withdrawal.status === "paid" ? "payé" : "refusé"}` };
   }
 
-  // 3. Passage à "paid" → initier d'ABORD le payout FeeXPay, puis valider via RPC.
-  //    Ordre sûr : le payout est lancé UNE seule fois et la RPC ne change le statut
-  //    que si la transition est autorisée (pending/approved → paid).
+  // 3. Passage à "paid".
+  //    ⚠️ PayGateGlobal n'expose AUCUN endpoint de payout (reversement) :
+  //    l'administrateur doit AVOIR versé le montant à l'utilisateur au
+  //    préalable (tableau de bord PayGate / compte Flooz-TMoney), puis
+  //    marquer le retrait comme payé ici. La référence de paiement PayGate
+  //    peut être enregistrée pour la traçabilité (paramètre optionnel).
   if (status === "paid") {
-    try {
-      const { initiatePayout } = await import("@/lib/feexpay");
-      const accountInfo = withdrawal.account_info || "";
-      const network = withdrawal.method || "MTN";
-      const fullPhone = accountInfo.replace(/\D/g, "");
+    const { data, error } = await supabase.rpc("validate_withdrawal", {
+      p_withdrawal_id: withdrawalId,
+      p_admin_id: admin.id,
+      p_status: "paid",
+      p_comment: comment || null,
+    });
 
-      await initiatePayout({
-        network,
-        phoneNumber: fullPhone,
-        amount: withdrawal.amount,
-        motif: "Retrait Rewardly",
-        callbackInfo: `withdrawal_${withdrawal.id}`,
-      });
+    if (error) {
+      console.error("validate_withdrawal (paid) error:", error.message);
+      return { success: false, error: error.message };
+    }
 
-      // Payout lancé → valider la transition (crédite locked_amount, clôture la txn)
-      const { data, error } = await supabase.rpc("validate_withdrawal", {
-        p_withdrawal_id: withdrawalId,
-        p_admin_id: admin.id,
-        p_status: "paid",
-        p_comment: comment || null,
-      });
-
-      if (error) {
-        console.error("validate_withdrawal (paid) error:", error.message);
-        return { success: false, error: `Le paiement FeeXPay est parti mais la validation a échoué : ${error.message}` };
-      }
-
-      // Mettre à jour la référence FeeXPay
+    // Traçabilité : référence de paiement PayGateGlobal (optionnelle)
+    if (paygateTxReference) {
       await supabase
         .from("withdrawals")
-        .update({ feexpay_reference: withdrawal.id, updated_at: new Date().toISOString() })
+        .update({ paygate_tx_reference: paygateTxReference, updated_at: new Date().toISOString() })
         .eq("id", withdrawalId);
-
-      revalidatePath("/admin/withdrawals");
-      return data;
-    } catch (e: any) {
-      console.error("Payout error:", e);
-      // Si le payout échoue (solde insuffisant, etc.) → approuver le retrait
-      // (pas "paid") pour que l'admin puisse réessayer sans risquer un double paiement.
-      const { data: approvedData, error: approvedError } = await supabase.rpc("validate_withdrawal", {
-        p_withdrawal_id: withdrawalId,
-        p_admin_id: admin.id,
-        p_status: "approved",
-        p_comment: comment || "Payout FeeXPay échoué - à payer manuellement",
-      });
-
-      if (approvedError) {
-        console.error("validate_withdrawal (approved fallback) error:", approvedError.message);
-        return { success: false, error: "Le retrait n'a ni pu être payé ni approuvé. Contactez le support." };
-      }
-
-      revalidatePath("/admin/withdrawals");
-      return {
-        success: true,
-        approved: true,
-        message: `Paiement FeeXPay échoué : ${e.message || "Erreur inconnue"}. Le retrait a été approuvé - veuillez payer l'utilisateur manuellement.`,
-      };
     }
+
+    revalidatePath("/admin/withdrawals");
+    return data;
   }
 
   // 4. Rejet : valider d'ABORD la transition via la RPC (elle refuse

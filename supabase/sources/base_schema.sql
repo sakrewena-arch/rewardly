@@ -562,7 +562,7 @@ CREATE POLICY "Users can view own wallet" ON wallets
   FOR SELECT USING (auth.uid() = user_id);
 -- NOTE SÉCURITÉ : AUCUNE politique "Users can update own wallet".
 -- Les écritures sur wallets passent UNIQUEMENT par les RPC SECURITY DEFINER
--- (submit_task, submit_deposit, credit_feeexpay_deposit, request_withdrawal_feeexpay…)
+-- (submit_task, submit_deposit, credit_paygate_deposit, request_withdrawal_paygate…)
 -- afin qu'un utilisateur ne puisse JAMAIS se créditer lui-même.
 CREATE POLICY "Admins can view all wallets" ON wallets
   FOR SELECT USING (is_admin());
@@ -627,7 +627,7 @@ CREATE POLICY "Admins can insert deposits" ON deposits
 CREATE POLICY "Users can view own withdrawals" ON withdrawals
   FOR SELECT USING (auth.uid() = user_id);
 -- NOTE SÉCURITÉ : PAS d'INSERT/UPDATE utilisateur. La demande passe par la
--- RPC submit_withdrawal / request_withdrawal_feeexpay (SECURITY DEFINER),
+-- RPC submit_withdrawal / request_withdrawal_paygate (SECURITY DEFINER),
 -- la validation par validate_withdrawal.
 CREATE POLICY "Admins can view all withdrawals" ON withdrawals
   FOR SELECT USING (is_admin());
@@ -1136,7 +1136,7 @@ BEGIN
   UPDATE withdrawals SET status = p_status, admin_comment = p_comment, reviewed_by = p_admin_id, updated_at = NOW()
   WHERE id = p_withdrawal_id;
   
-  -- 💰 Débit UNIQUE effectué À LA DEMANDE (via /api/feexpay/payout ou submit_withdrawal).
+  -- 💰 Débit UNIQUE effectué À LA DEMANDE (via /api/paygate/payout ou submit_withdrawal).
   -- Au passage à 'paid', on ne débite PLUS le wallet : on clôture simplement la
   -- transaction de débit en attente qui référence ce retrait.
   IF p_status = 'paid' THEN
@@ -1153,7 +1153,7 @@ BEGIN
           AND type = 'withdrawal'
           AND status = 'pending'
           AND amount = -v_withdrawal.amount
-          AND (reference = v_withdrawal.id OR reference IS NULL)
+          AND (reference = v_withdrawal.id::TEXT OR reference IS NULL)
         ORDER BY created_at DESC
         LIMIT 1
       );
@@ -1187,7 +1187,7 @@ BEGIN
           AND type = 'withdrawal'
           AND status = 'pending'
           AND amount = -v_withdrawal.amount
-          AND (reference = v_withdrawal.id OR reference IS NULL)
+          AND (reference = v_withdrawal.id::TEXT OR reference IS NULL)
         ORDER BY created_at DESC
         LIMIT 1
       );
@@ -1815,11 +1815,11 @@ END;
 $$;
 
 -- ============================================================
--- 7bis. RPC FEEXPAY ATOMIQUES (service_role uniquement)
+-- 7bis. RPC PayGateGlobal ATOMIQUES (service_role uniquement)
 -- ============================================================
--- Retrait FeeXPay : débit + demande + transaction en UNE transaction,
+-- Retrait PayGateGlobal : débit + demande + transaction en UNE transaction,
 -- le montant est limité aux GAINS retirables (jamais dépôts/capital).
-CREATE OR REPLACE FUNCTION request_withdrawal_feeexpay(
+CREATE OR REPLACE FUNCTION request_withdrawal_paygate(
   p_user_id UUID,
   p_amount DECIMAL,
   p_method TEXT,
@@ -1888,13 +1888,13 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
-GRANT EXECUTE ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
 
--- Crédit de dépôt FeeXPay ATOMIQUE (verrou ligne + anti double-crédit)
-CREATE OR REPLACE FUNCTION credit_feeexpay_deposit(
+-- Crédit de dépôt PayGateGlobal ATOMIQUE (verrou ligne + anti double-crédit)
+CREATE OR REPLACE FUNCTION credit_paygate_deposit(
   p_reference TEXT
 )
 RETURNS JSONB
@@ -1943,7 +1943,7 @@ BEGIN
 
   INSERT INTO wallet_transactions (user_id, wallet_id, amount, type, description, status, reference)
   VALUES (v_deposit.user_id, v_wallet.id, v_deposit.amount, 'deposit',
-          'Dépôt via FeeXPay (' || p_reference || ')', 'completed', p_reference);
+          'Dépôt via PayGateGlobal (' || p_reference || ')', 'completed', p_reference);
 
   INSERT INTO notifications (user_id, title, message, type)
   VALUES (v_deposit.user_id, 'Dépôt confirmé ✅',
@@ -1953,10 +1953,10 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM anon;
-REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM authenticated;
-GRANT EXECUTE ON FUNCTION credit_feeexpay_deposit(TEXT) TO service_role;
+REVOKE ALL ON FUNCTION credit_paygate_deposit(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION credit_paygate_deposit(TEXT) FROM anon;
+REVOKE ALL ON FUNCTION credit_paygate_deposit(TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION credit_paygate_deposit(TEXT) TO service_role;
 
 -- ============================================================
 -- 8. SEED DATA (ON CONFLICT DO NOTHING)
@@ -2147,7 +2147,7 @@ END $$;
 --   4. Calcul retirable COHÉRENT dans toutes les RPC :
 --      gains - retraits payés - retraits pending/approuvés - services.
 --   5. submit_withdrawal & submit_deposit : check auth.uid() (défense en profondeur).
---   6. request_withdrawal_feeexpay : règles métier (jour + délai) appliquées.
+--   6. request_withdrawal_paygate : règles métier (jour + délai) appliquées.
 -- IDEMPOTENT : exécutable plusieurs fois sans erreur.
 -- ============================================================
 
@@ -2391,7 +2391,7 @@ BEGIN
 
   -- 💰 Montant retirable COHÉRENT : gains - retraits payés - retraits
   --    pending/approuvés - paiements services (aligné avec get_withdrawable_amount
-  --    et request_withdrawal_feeexpay).
+  --    et request_withdrawal_paygate).
   v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
     - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0)
     - COALESCE((SELECT SUM(w.amount) FROM withdrawals w WHERE w.user_id = p_user_id AND w.status IN ('pending', 'approved')), 0)
@@ -2461,9 +2461,9 @@ BEGIN
 END;
 $$;
 -- ============================================================
--- 7. REQUEST WITHDRAWAL FEEXPAY : règles métier + calcul cohérent
+-- 7. REQUEST WITHDRAWAL PayGateGlobal : règles métier + calcul cohérent
 -- ============================================================
-CREATE OR REPLACE FUNCTION request_withdrawal_feeexpay(
+CREATE OR REPLACE FUNCTION request_withdrawal_paygate(
   p_user_id UUID,
   p_amount DECIMAL,
   p_method TEXT,
@@ -2566,10 +2566,10 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
-GRANT EXECUTE ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
 
 -- ============================================================
 -- 8. PRIVILÈGES D'EXÉCUTION des fonctions corrigées
@@ -2584,4 +2584,4 @@ REVOKE ALL ON FUNCTION activate_plan(UUID, UUID, DECIMAL) FROM PUBLIC;
 REVOKE ALL ON FUNCTION submit_withdrawal(UUID, DECIMAL, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION submit_deposit(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION get_withdrawable_amount(UUID) FROM PUBLIC;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;

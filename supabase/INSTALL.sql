@@ -782,31 +782,60 @@ EXCEPTION WHEN OTHERS THEN
   RAISE NOTICE 'Comptes système non créés (sans conséquence) : %', SQLERRM;
 END $$;
 
--- [supabase/sources/migrations/00009_feexpay_integration.sql:1]
+-- [supabase/sources/migrations/00009_paygate_integration.sql:1]
 -- ============================================================
--- MIGRATION : Intégration FeeXPay
+-- MIGRATION 00009 : Intégration PayGateGlobal
 -- Ajoute les colonnes nécessaires pour les dépôts et retraits
+--
+-- ℹ️ PayGateGlobal (FLOOZ / TMONEY — Togo) ne fournit AUCUN endpoint de
+--    payout : seule la référence de transaction du dépôt est stockée
+--    (`paygate_tx_reference`). Pour les retraits, la colonne sert à
+--    consigner la référence de virement saisie par l'administrateur.
+--
+-- ⚠️ Les colonnes historiques `feexpay_reference` (ancien prestataire)
+--    ne sont PAS supprimées : elles restent en base, inutilisées, afin de
+--    préserver l'historique des transactions. Aucune donnée n'est perdue.
 -- ============================================================
 
 -- 1. Ajouter les colonnes à la table deposits
 ALTER TABLE public.deposits
-  ADD COLUMN IF NOT EXISTS feexpay_reference TEXT,
+  ADD COLUMN IF NOT EXISTS paygate_tx_reference TEXT,
   ADD COLUMN IF NOT EXISTS account_number TEXT,
   ADD COLUMN IF NOT EXISTS network TEXT;
 
--- [supabase/sources/migrations/00009_feexpay_integration.sql:1]
+-- [supabase/sources/migrations/00009_paygate_integration.sql:1]
 -- 2. Ajouter les colonnes à la table withdrawals
 ALTER TABLE public.withdrawals
-  ADD COLUMN IF NOT EXISTS feexpay_reference TEXT,
+  ADD COLUMN IF NOT EXISTS paygate_tx_reference TEXT,
   ADD COLUMN IF NOT EXISTS account_info TEXT,
   ADD COLUMN IF NOT EXISTS network TEXT;
 
--- [supabase/sources/migrations/00009_feexpay_integration.sql:1]
--- 3. Index pour les recherches par référence FeeXPay
-CREATE INDEX IF NOT EXISTS idx_deposits_feexpay_reference ON public.deposits(feexpay_reference);
+-- [supabase/sources/migrations/00009_paygate_integration.sql:1]
+-- 3. Index pour les recherches par référence PayGateGlobal
+CREATE INDEX IF NOT EXISTS idx_deposits_paygate_tx_reference ON public.deposits(paygate_tx_reference);
 
--- [supabase/sources/migrations/00009_feexpay_integration.sql:20]
-CREATE INDEX IF NOT EXISTS idx_withdrawals_feexpay_reference ON public.withdrawals(feexpay_reference);
+-- [supabase/sources/migrations/00009_paygate_integration.sql:29]
+CREATE INDEX IF NOT EXISTS idx_withdrawals_paygate_tx_reference ON public.withdrawals(paygate_tx_reference);
+
+-- [supabase/sources/migrations/00009_paygate_integration.sql:29]
+-- 4. Reprise de l'historique de l'ancien prestataire, UNIQUEMENT si les
+--    colonnes historiques existent (sinon la base est déjà neuve → no-op).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'deposits'
+               AND column_name = 'feexpay_reference') THEN
+    EXECUTE 'UPDATE public.deposits SET paygate_tx_reference = feexpay_reference '
+         || 'WHERE feexpay_reference IS NOT NULL AND paygate_tx_reference IS NULL';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'withdrawals'
+               AND column_name = 'feexpay_reference') THEN
+    EXECUTE 'UPDATE public.withdrawals SET paygate_tx_reference = feexpay_reference '
+         || 'WHERE feexpay_reference IS NOT NULL AND paygate_tx_reference IS NULL';
+  END IF;
+END $$;
 
 -- [supabase/sources/migrations/00010_security_and_bugfixes.sql:1]
 -- ============================================================
@@ -1263,12 +1292,14 @@ BEGIN
     'get_users_with_details',
     'submit_withdrawal',
     'submit_deposit',
-    'request_withdrawal_feeexpay',
-    'credit_feeexpay_deposit',
+    'request_withdrawal_paygate',
+    'credit_paygate_deposit',
     'get_withdrawable_amount',
     'upsert_user_preferences',
     'create_service_order',
-    'credit_referral_commission'
+    'credit_referral_commission',
+    'credit_feeexpay_deposit',
+    'request_withdrawal_feeexpay'
   ] LOOP
     FOR r IN
       SELECT p.oid::regprocedure::text AS sig
@@ -1293,13 +1324,13 @@ END $$;
 -- 2. Inscription via lien (?ref=CODE) → le filleul est enregistré comme
 --    sous-affilié ET la commission du parrain est créditée IMMÉDIATEMENT
 --    (plus besoin de ressaisir le code après inscription).
--- 3. request_withdrawal_feeexpay : demande de retrait ATOMIQUE.
+-- 3. request_withdrawal_paygate : demande de retrait ATOMIQUE.
 --    Le montant est vérifié contre les GAINS retirables (jamais les dépôts
 --    ni le capital), puis le wallet est débité, la demande créée et la
 --    transaction enregistrée dans une SEULE transaction (SELECT FOR UPDATE).
---      → remplace le flux manuel /api/feexpay/payout (et son rollback bugué).
--- 4. credit_feeexpay_deposit : crédit de dépôt ATOMIQUE (anti double-crédit)
---    utilisé par /api/feexpay/deposit-status.
+--      → remplace le flux manuel /api/paygate/payout (et son rollback bugué).
+-- 4. credit_paygate_deposit : crédit de dépôt ATOMIQUE (anti double-crédit)
+--    utilisé par /api/paygate/deposit-status.
 -- Ces 2 RPC sont réservées au rôle service_role (revoked from PUBLIC/anon/authenticated).
 -- IDEMPOTENT : CREATE OR REPLACE / DROP IF EXISTS.
 -- ============================================================
@@ -1858,9 +1889,9 @@ $$;
 
 -- [supabase/sources/migrations/00014_fix_double_debit_withdrawal.sql:1]
 -- ============================================================
--- MIGRATION 00014 : CORRECTION DU DOUBLE DÉBIT DES RETRAITS FEEXPAY
+-- MIGRATION 00014 : CORRECTION DU DOUBLE DÉBIT DES RETRAITS PAYGATE
 -- ============================================================
--- Problème : /api/feexpay/payout débite le wallet À LA DEMANDE, puis
+-- Problème : /api/paygate/payout débite le wallet À LA DEMANDE, puis
 -- validate_withdrawal re-débitait le wallet au passage à 'paid'
 -- → l'utilisateur perdait 2× le montant.
 --
@@ -1941,7 +1972,7 @@ BEGIN
           AND type = 'withdrawal'
           AND status = 'pending'
           AND amount = -v_withdrawal.amount
-          AND (reference = v_withdrawal.id OR reference IS NULL)
+          AND (reference = v_withdrawal.id::TEXT OR reference IS NULL)
         ORDER BY created_at DESC
         LIMIT 1
       );
@@ -1975,7 +2006,7 @@ BEGIN
           AND type = 'withdrawal'
           AND status = 'pending'
           AND amount = -v_withdrawal.amount
-          AND (reference = v_withdrawal.id OR reference IS NULL)
+          AND (reference = v_withdrawal.id::TEXT OR reference IS NULL)
         ORDER BY created_at DESC
         LIMIT 1
       );
@@ -2687,7 +2718,7 @@ BEGIN
 
   -- 💰 Montant retirable COHÉRENT : gains - retraits payés - retraits
   --    pending/approuvés - paiements services (aligné avec get_withdrawable_amount
-  --    et request_withdrawal_feeexpay).
+  --    et request_withdrawal_paygate).
   v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
     - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0)
     - COALESCE((SELECT SUM(w.amount) FROM withdrawals w WHERE w.user_id = p_user_id AND w.status IN ('pending', 'approved')), 0)
@@ -2759,9 +2790,9 @@ $$;
 
 -- [supabase/sources/migrations/00017_security_fixes.sql:87]
 -- ============================================================
--- 7. REQUEST WITHDRAWAL FEEXPAY : règles métier + calcul cohérent
+-- 7. REQUEST WITHDRAWAL PayGateGlobal : règles métier + calcul cohérent
 -- ============================================================
-CREATE OR REPLACE FUNCTION request_withdrawal_feeexpay(
+CREATE OR REPLACE FUNCTION request_withdrawal_paygate(
   p_user_id UUID,
   p_amount DECIMAL,
   p_method TEXT,
@@ -2866,9 +2897,9 @@ $$;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:217]
 -- ============================================================
--- 4. CRÉDIT DE DÉPÔT FEEXPAY ATOMIQUE (anti double-crédit)
+-- 4. CRÉDIT DE DÉPÔT PayGateGlobal ATOMIQUE (anti double-crédit)
 -- ============================================================
-CREATE OR REPLACE FUNCTION public.credit_feeexpay_deposit(
+CREATE OR REPLACE FUNCTION public.credit_paygate_deposit(
   p_reference text
 )
 RETURNS jsonb
@@ -2926,7 +2957,7 @@ BEGIN
 
   INSERT INTO public.wallet_transactions (user_id, wallet_id, amount, type, description, status, reference)
   VALUES (v_deposit.user_id, v_wallet.id, v_deposit.amount, 'deposit',
-          'Dépôt via FeeXPay (' || p_reference || ')', 'completed', p_reference);
+          'Dépôt via PayGateGlobal (' || p_reference || ')', 'completed', p_reference);
 
   INSERT INTO public.notifications (user_id, title, message, type)
   VALUES (v_deposit.user_id, 'Dépôt confirmé ✅',
@@ -4001,28 +4032,28 @@ create policy "Users insert service orders"
  * ====================================================================== */
 
 -- [supabase/sources/base_schema.sql:1891]
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
 
 -- [supabase/sources/base_schema.sql:1892]
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
 
 -- [supabase/sources/base_schema.sql:1893]
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
 
 -- [supabase/sources/base_schema.sql:1894]
-GRANT EXECUTE ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
 
 -- [supabase/sources/base_schema.sql:1956]
-REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION credit_paygate_deposit(TEXT) FROM PUBLIC;
 
 -- [supabase/sources/base_schema.sql:1957]
-REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM anon;
+REVOKE ALL ON FUNCTION credit_paygate_deposit(TEXT) FROM anon;
 
 -- [supabase/sources/base_schema.sql:1958]
-REVOKE ALL ON FUNCTION credit_feeexpay_deposit(TEXT) FROM authenticated;
+REVOKE ALL ON FUNCTION credit_paygate_deposit(TEXT) FROM authenticated;
 
 -- [supabase/sources/base_schema.sql:1959]
-GRANT EXECUTE ON FUNCTION credit_feeexpay_deposit(TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION credit_paygate_deposit(TEXT) TO service_role;
 
 -- [supabase/sources/base_schema.sql:2572]
 -- ============================================================
@@ -4054,28 +4085,28 @@ REVOKE ALL ON FUNCTION submit_deposit(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBL
 REVOKE ALL ON FUNCTION get_withdrawable_amount(UUID) FROM PUBLIC;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:214]
-REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.request_withdrawal_paygate(uuid, numeric, text, text, text) FROM PUBLIC;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:215]
-REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM anon;
+REVOKE ALL ON FUNCTION public.request_withdrawal_paygate(uuid, numeric, text, text, text) FROM anon;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:216]
-REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) FROM authenticated;
+REVOKE ALL ON FUNCTION public.request_withdrawal_paygate(uuid, numeric, text, text, text) FROM authenticated;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:217]
-GRANT EXECUTE ON FUNCTION public.request_withdrawal_feeexpay(uuid, numeric, text, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.request_withdrawal_paygate(uuid, numeric, text, text, text) TO service_role;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:290]
-REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.credit_paygate_deposit(text) FROM PUBLIC;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:291]
-REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM anon;
+REVOKE ALL ON FUNCTION public.credit_paygate_deposit(text) FROM anon;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:292]
-REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM authenticated;
+REVOKE ALL ON FUNCTION public.credit_paygate_deposit(text) FROM authenticated;
 
 -- [supabase/sources/migrations/00015_referral_atomic_wallet.sql:293]
-GRANT EXECUTE ON FUNCTION public.credit_feeexpay_deposit(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.credit_paygate_deposit(text) TO service_role;
 
 -- [supabase/sources/migrations/00019_task_reward_notifications.sql:1]
 -- Privilèges
@@ -4118,37 +4149,52 @@ GRANT EXECUTE ON FUNCTION public.credit_referral_commission(UUID, NUMERIC, UUID)
 
 REVOKE ALL ON FUNCTION public.add_reward(uuid, decimal, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.add_reward(uuid, decimal, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.add_reward(uuid, decimal, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.approve_submission(uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.approve_submission(uuid, uuid, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.approve_submission(uuid, uuid, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.reject_submission(uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.reject_submission(uuid, uuid, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.reject_submission(uuid, uuid, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.validate_deposit(uuid, uuid, boolean, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.validate_deposit(uuid, uuid, boolean, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.validate_deposit(uuid, uuid, boolean, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.validate_withdrawal(uuid, uuid, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.validate_withdrawal(uuid, uuid, text, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.validate_withdrawal(uuid, uuid, text, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.ban_user(uuid, uuid, boolean) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.ban_user(uuid, uuid, boolean) FROM anon;
+GRANT EXECUTE ON FUNCTION public.ban_user(uuid, uuid, boolean) TO authenticated;
 REVOKE ALL ON FUNCTION public.delete_user(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.delete_user(uuid, uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.delete_user(uuid, uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.create_task(uuid, text, text, decimal, uuid, uuid, text, integer, text, text, integer, integer, timestamptz, text, jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.create_task(uuid, text, text, decimal, uuid, uuid, text, integer, text, text, integer, integer, timestamptz, text, jsonb) FROM anon;
+GRANT EXECUTE ON FUNCTION public.create_task(uuid, text, text, decimal, uuid, uuid, text, integer, text, text, integer, integer, timestamptz, text, jsonb) TO authenticated;
 REVOKE ALL ON FUNCTION public.update_task(uuid, uuid, text, text, decimal, uuid, text, integer, text, text, integer, integer, timestamptz, text, boolean) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.update_task(uuid, uuid, text, text, decimal, uuid, text, integer, text, text, integer, integer, timestamptz, text, boolean) FROM anon;
+GRANT EXECUTE ON FUNCTION public.update_task(uuid, uuid, text, text, decimal, uuid, text, integer, text, text, integer, integer, timestamptz, text, boolean) TO authenticated;
 REVOKE ALL ON FUNCTION public.delete_task(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.delete_task(uuid, uuid) FROM anon;
+GRANT EXECUTE ON FUNCTION public.delete_task(uuid, uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.create_plan(uuid, text, text, decimal, integer, decimal, decimal, text, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.create_plan(uuid, text, text, decimal, integer, decimal, decimal, text, text, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.create_plan(uuid, text, text, decimal, integer, decimal, decimal, text, text, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.update_plan(uuid, uuid, text, decimal, integer, decimal, decimal, text, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.update_plan(uuid, uuid, text, decimal, integer, decimal, decimal, text, text, text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.update_plan(uuid, uuid, text, decimal, integer, decimal, decimal, text, text, text) TO authenticated;
 REVOKE ALL ON FUNCTION public.toggle_plan_status(uuid, uuid, boolean) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.toggle_plan_status(uuid, uuid, boolean) FROM anon;
+GRANT EXECUTE ON FUNCTION public.toggle_plan_status(uuid, uuid, boolean) TO authenticated;
 REVOKE ALL ON FUNCTION public.get_platform_stats() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_platform_stats() FROM anon;
+GRANT EXECUTE ON FUNCTION public.get_platform_stats() TO authenticated;
 REVOKE ALL ON FUNCTION public.get_users_with_details(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.get_users_with_details(text) FROM anon;
+GRANT EXECUTE ON FUNCTION public.get_users_with_details(text) TO authenticated;
 REVOKE ALL ON FUNCTION public.credit_referral_commission(uuid, numeric, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.credit_referral_commission(uuid, numeric, uuid) FROM anon;
-REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.credit_feeexpay_deposit(text) FROM anon;
-REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, decimal, text, text, text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.request_withdrawal_feeexpay(uuid, decimal, text, text, text) FROM anon;
+REVOKE ALL ON FUNCTION public.credit_paygate_deposit(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.credit_paygate_deposit(text) FROM anon;
+REVOKE ALL ON FUNCTION public.request_withdrawal_paygate(uuid, decimal, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.request_withdrawal_paygate(uuid, decimal, text, text, text) FROM anon;

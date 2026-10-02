@@ -75,7 +75,14 @@ const ADMIN_RPCS = [
 ];
 
 // RPC réservées au serveur / à l'administration (aucun accès anonyme)
-const NO_ANON = [...ADMIN_RPCS, "credit_referral_commission", "credit_feeexpay_deposit", "request_withdrawal_feeexpay"];
+const NO_ANON = [...ADMIN_RPCS, "credit_referral_commission", "credit_paygate_deposit", "request_withdrawal_paygate"];
+
+// Anciennes RPC (prestataire FeeXPay remplacé par PayGateGlobal) : elles ne
+// sont plus définies dans les sources, mais peuvent subsister dans une base
+// déjà installée. On les supprime explicitement pour éviter des surcharges
+// fantômes (« Could not choose the best candidate function ») et tout risque
+// d'appel à un flux de paiement obsolète.
+const LEGACY_RPC_NAMES = ["credit_feeexpay_deposit", "request_withdrawal_feeexpay"];
 
 // ------------------------------------------------------------
 // 2. Découpage en instructions de premier niveau ($ / ' / -- / /* gérés)
@@ -359,6 +366,14 @@ for (const name of NO_ANON) {
   const sig = typesSig(stripLeadingComments(fn.stmt));
   hardening.push(`REVOKE ALL ON FUNCTION public.${name}(${sig}) FROM PUBLIC;`);
   hardening.push(`REVOKE ALL ON FUNCTION public.${name}(${sig}) FROM anon;`);
+  // Les RPC d'administration sont appelées par les Server Actions avec la
+  // session de l'admin connecté : `authenticated` doit donc avoir un EXECUTE
+  // EXPLICITE (ne pas dépendre des privilèges par défaut de l'hébergeur).
+  // La sécurité est assurée DANS la fonction : elle refuse tout appelant non
+  // admin via is_admin(). Le client anonyme, lui, reste bloqué.
+  if (ADMIN_RPCS.includes(name)) {
+    hardening.push(`GRANT EXECUTE ON FUNCTION public.${name}(${sig}) TO authenticated;`);
+  }
 }
 
 // ------------------------------------------------------------
@@ -375,7 +390,10 @@ const rpcNames = [...functions.entries()]
   .filter(([, f]) => typesSig(stripLeadingComments(f.stmt)) !== "")
   .map(([name]) => name);
 
-const fnDrops = rpcNames.length
+// Les RPC obsolètes (legacy) sont ajoutées à la liste de nettoyage
+const dropNames = [...new Set([...rpcNames, ...LEGACY_RPC_NAMES])];
+
+const fnDrops = dropNames.length
   ? [
       "-- Suppression des éventuelles ANCIENNES surcharges des RPC (idempotent).",
       "-- Sans cela : « Could not choose the best candidate function ».",
@@ -385,7 +403,7 @@ const fnDrops = rpcNames.length
       "  r      record;",
       "BEGIN",
       "  FOREACH v_name IN ARRAY ARRAY[",
-      rpcNames.map((n) => `    '${n}'`).join(",\n"),
+      dropNames.map((n) => `    '${n}'`).join(",\n"),
       "  ] LOOP",
       "    FOR r IN",
       "      SELECT p.oid::regprocedure::text AS sig",
@@ -598,7 +616,7 @@ console.log(`Policies RLS        : ${policies.size}  (ignorées : ${dropped.poli
 console.log(`GRANT/REVOKE        : ${privileges.length}  (doublons ignorés : ${dropped.privileges})`);
 console.log(`Instructions schéma : ${schemaStmts.length}  (doublons ignorés : ${dropped.schema})`);
 console.log(`Gardes admin        : ${guardOk.length}/${ADMIN_RPCS.length}`);
-console.log(`RPC protégées (surcharges nettoyées) : ${rpcNames.length}`);
+console.log(`RPC protégées (surcharges nettoyées) : ${dropNames.length}`);
 console.log(`REVOKE de durcissement : ${hardening.length}`);
 console.log(`Références validées : OK (tables, fonctions, signatures)`);
 if (dropFunctionStmts.length) {

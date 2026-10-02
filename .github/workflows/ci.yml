@@ -73,8 +73,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
-          FEEXPAY_API_KEY: ${{ secrets.FEEXPAY_API_KEY }}
-          FEEXPAY_SHOP_ID: ${{ secrets.FEEXPAY_SHOP_ID }}
+          PAYGATE_AUTH_TOKEN: ${{ secrets.PAYGATE_AUTH_TOKEN }}
 
   deploy:
     name: Deploy to Vercel
@@ -102,5 +101,4 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
-          FEEXPAY_API_KEY: ${{ secrets.FEEXPAY_API_KEY }}
-          FEEXPAY_SHOP_ID: ${{ secrets.FEEXPAY_SHOP_ID }}
+          PAYGATE_AUTH_TOKEN: ${{ secrets.PAYGATE_AUTH_TOKEN }}

@@ -10,7 +10,7 @@
 --   4. Calcul retirable COHÉRENT dans toutes les RPC :
 --      gains - retraits payés - retraits pending/approuvés - services.
 --   5. submit_withdrawal & submit_deposit : check auth.uid() (défense en profondeur).
---   6. request_withdrawal_feeexpay : règles métier (jour + délai) appliquées.
+--   6. request_withdrawal_paygate : règles métier (jour + délai) appliquées.
 -- IDEMPOTENT : exécutable plusieurs fois sans erreur.
 -- ============================================================
 
@@ -21,7 +21,7 @@ DROP POLICY IF EXISTS "Users can update own wallet" ON public.wallets;
 DROP POLICY IF EXISTS "Users can insert own transactions" ON public.wallet_transactions;
 -- Un utilisateur ne peut plus créer/modifier ses dépôts/retraits directement :
 -- tout passe par les RPC SECURITY DEFINER (submit_deposit, submit_withdrawal,
--- request_withdrawal_feeexpay, validate_deposit, validate_withdrawal).
+-- request_withdrawal_paygate, validate_deposit, validate_withdrawal).
 DROP POLICY IF EXISTS "Users can create deposits" ON public.deposits;
 DROP POLICY IF EXISTS "Users can update own deposits" ON public.deposits;
 DROP POLICY IF EXISTS "Users can create withdrawals" ON public.withdrawals;
@@ -290,7 +290,7 @@ BEGIN
 
   -- 💰 Montant retirable COHÉRENT : gains - retraits payés - retraits
   --    pending/approuvés - paiements services (aligné avec get_withdrawable_amount
-  --    et request_withdrawal_feeexpay).
+  --    et request_withdrawal_paygate).
   v_withdrawable := COALESCE(v_wallet.total_earnings, 0)
     - COALESCE((SELECT SUM(ABS(wt.amount)) FROM wallet_transactions wt WHERE wt.user_id = p_user_id AND wt.type = 'withdrawal' AND wt.status = 'completed'), 0)
     - COALESCE((SELECT SUM(w.amount) FROM withdrawals w WHERE w.user_id = p_user_id AND w.status IN ('pending', 'approved')), 0)
@@ -360,9 +360,9 @@ BEGIN
 END;
 $$;
 -- ============================================================
--- 7. REQUEST WITHDRAWAL FEEXPAY : règles métier + calcul cohérent
+-- 7. REQUEST WITHDRAWAL PayGateGlobal : règles métier + calcul cohérent
 -- ============================================================
-CREATE OR REPLACE FUNCTION request_withdrawal_feeexpay(
+CREATE OR REPLACE FUNCTION request_withdrawal_paygate(
   p_user_id UUID,
   p_amount DECIMAL,
   p_method TEXT,
@@ -465,10 +465,10 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
-GRANT EXECUTE ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM anon;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) TO service_role;
 
 -- ============================================================
 -- 8. PRIVILÈGES D'EXÉCUTION des fonctions corrigées
@@ -483,4 +483,4 @@ REVOKE ALL ON FUNCTION activate_plan(UUID, UUID, DECIMAL) FROM PUBLIC;
 REVOKE ALL ON FUNCTION submit_withdrawal(UUID, DECIMAL, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION submit_deposit(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION get_withdrawable_amount(UUID) FROM PUBLIC;
-REVOKE ALL ON FUNCTION request_withdrawal_feeexpay(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION request_withdrawal_paygate(UUID, DECIMAL, TEXT, TEXT, TEXT) FROM PUBLIC;

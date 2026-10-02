@@ -257,7 +257,7 @@ $$;
 -- 5. VALIDATE WITHDRAWAL
 -- Flux : pending → approved|rejected|paid, approved → paid
 -- ⚠️ Le wallet est débité UNE SEULE FOIS, À LA DEMANDE (via la route
--- /api/feexpay/payout ou la RPC submit_withdrawal). Ici on change le statut
+-- /api/paygate/payout ou la RPC submit_withdrawal). Ici on change le statut
 -- et on clôture la transaction de débit : AUCUN nouveau débit n'est fait
 -- au passage à 'paid' → plus de double débit (correction).
 -- ============================================================
@@ -325,7 +325,7 @@ BEGIN
           AND type = 'withdrawal'
           AND status = 'pending'
           AND amount = -v_withdrawal.amount
-          AND (reference = v_withdrawal.id OR reference IS NULL)
+          AND (reference = v_withdrawal.id::TEXT OR reference IS NULL)
         ORDER BY created_at DESC
         LIMIT 1
       );
@@ -359,7 +359,7 @@ BEGIN
           AND type = 'withdrawal'
           AND status = 'pending'
           AND amount = -v_withdrawal.amount
-          AND (reference = v_withdrawal.id OR reference IS NULL)
+          AND (reference = v_withdrawal.id::TEXT OR reference IS NULL)
         ORDER BY created_at DESC
         LIMIT 1
       );

@@ -328,7 +328,7 @@ rewardly/
 - **Client Supabase admin** uniquement côté serveur
 - **Logs d'audit** pour toutes les actions admin
 - **Validation Zod** côté client et serveur
-- **Rate limiting** sur les routes sensibles (`/api/feexpay/*`, `/api/admin/login`)
+- **Rate limiting** sur les routes sensibles (`/api/paygate/*`, `/api/admin/login`)
 - **Uploads** sécurisés vers Supabase Storage (bucket `proofs`)
 - **Reset de mot de passe** via Supabase Auth (email)
 
@@ -338,8 +338,8 @@ rewardly/
 > Le `.env.example` du dépôt ne contient désormais que des **placeholders**.
 
 > 🧪 **Operations financières atomiques** : les dépôts (crédit) et retraits (débit)
-> passent par des RPC SQL `SECURITY DEFINER` (`credit_feeexpay_deposit`,
-> `request_withdrawal_feeexpay`) avec verrou de ligne `SELECT … FOR UPDATE`.
+> passent par des RPC SQL `SECURITY DEFINER` (`credit_paygate_deposit`,
+> `request_withdrawal_paygate`) avec verrou de ligne `SELECT … FOR UPDATE`.
 > Le montant retirable est limité aux **gains** (jamais les dépôts ni le capital).
 > Migration requise : incluse dans `supabase/INSTALL.sql` (fichier unique à exécuter).
 

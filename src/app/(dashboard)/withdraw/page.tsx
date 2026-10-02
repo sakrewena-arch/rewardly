@@ -57,9 +57,9 @@ export default function WithdrawPage() {
 
   const paymentMethods = countryConfig?.paymentMethods || [];
   const currencySymbol = countryConfig?.currencySymbol || "FCFA";
-  const phoneCode = countryConfig?.phoneCode || "+225";
+  const phoneCode = countryConfig?.phoneCode || "+228";
 
-  // Initier le retrait FeeXPay
+  // Initier le retrait (PayGateGlobal : versement manuel par l'admin)
   const handleInitiateWithdrawal = async () => {
     if (!selectedMethod || !phoneNumber || !amount) return;
     const numAmount = Number(amount);
@@ -74,7 +74,7 @@ export default function WithdrawPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const response = await fetch("/api/feexpay/payout", {
+      const response = await fetch("/api/paygate/payout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

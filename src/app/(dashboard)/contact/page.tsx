@@ -25,11 +25,11 @@ const knowledgeBase: { keywords: string[]; answer: string }[] = [
   },
   {
     keywords: ["depot", "dépôt", "recharger", "payer"],
-    answer: "💳 Pour faire un dépôt :\n1. Allez dans l'onglet 'Dépôt'\n2. Choisissez votre opérateur (MTN, Orange, Wave, Moov...)\n3. Entrez le montant (minimum 5 000 FCFA)\n4. Confirmez le paiement sur votre téléphone\n5. Votre wallet est crédité automatiquement !",
+    answer: "💳 Pour faire un dépôt :\n1. Allez dans l'onglet 'Dépôt'\n2. Choisissez votre opérateur (Flooz, T-Money)\n3. Entrez le montant (minimum 5 000 FCFA)\n4. Confirmez le paiement sur votre téléphone\n5. Votre wallet est crédité automatiquement !",
   },
   {
     keywords: ["retrait", "retirer", "retirable", "retirer argent"],
-    answer: "🏧 Pour retirer vos gains :\n1. Allez dans l'onglet 'Retrait'\n2. Choisissez votre opérateur\n3. Entrez le montant à retirer\n4. La demande est envoyée à l'admin\n5. L'argent est envoyé sur votre numéro via FeeXPay\n\n⚠️ Seuls les gains de tâches sont retirables (pas le capital investi).",
+    answer: "🏧 Pour retirer vos gains :\n1. Allez dans l'onglet 'Retrait'\n2. Choisissez votre opérateur (Flooz, T-Money)\n3. Entrez le montant à retirer\n4. La demande est envoyée à l'admin\n5. L'argent est envoyé sur votre numéro (PayGateGlobal)\n\n⚠️ Seuls les gains de tâches sont retirables (pas le capital investi).",
   },
   {
     keywords: ["pack", "plan", "bronze", "silver", "gold", "activer"],

@@ -15,13 +15,13 @@ individuellement — utilisez le fichier unique
 | 00006 | `cleanup_data.sql` | nettoyage de données |
 | 00007 | `cleanup_and_admin.sql` | nettoyage + admin |
 | 00008 | `restore_rls_policies.sql` | **restauration RLS** (`is_admin`, `is_staff`) |
-| 00009 | `feexpay_integration.sql` | intégration FeeXPay |
+| 00009 | `paygate_integration.sql` | intégration PayGateGlobal (`paygate_tx_reference`) |
 | 00010 | `security_and_bugfixes.sql` | **gardes admin** sur les RPC, anti double-paiement |
 | 00011 | `user_preferences.sql` | table `user_preferences` |
 | 00012 | `service_orders.sql` | table `service_orders` |
 | 00013 | `service_transaction_type.sql` | type de transaction `service` |
 | 00014 | `fix_double_debit_withdrawal.sql` | retrait débité une seule fois |
-| 00015 | `referral_atomic_wallet.sql` | wallet atomique + `credit_feeexpay_deposit` |
+| 00015 | `referral_atomic_wallet.sql` | wallet atomique + `credit_paygate_deposit` |
 | 00016 | `push_tokens.sql` | table `push_tokens` (FCM) |
 | 00017 | `security_fixes.sql` | RLS wallets/transactions, trigger anti auto-promotion |
 | 00018 | `reminder_notifications.sql` | notifications de rappel |

@@ -397,7 +397,7 @@ export interface Database {
           status: 'pending' | 'approved' | 'rejected';
           admin_comment: string | null;
           reviewed_by: string | null;
-          feexpay_reference: string | null;
+          paygate_tx_reference: string | null;
           account_number: string | null;
           network: string | null;
           description: string | null;
@@ -414,7 +414,7 @@ export interface Database {
           status?: 'pending' | 'approved' | 'rejected';
           admin_comment?: string | null;
           reviewed_by?: string | null;
-          feexpay_reference?: string | null;
+          paygate_tx_reference?: string | null;
           account_number?: string | null;
           network?: string | null;
           description?: string | null;
@@ -431,7 +431,7 @@ export interface Database {
           status?: 'pending' | 'approved' | 'rejected';
           admin_comment?: string | null;
           reviewed_by?: string | null;
-          feexpay_reference?: string | null;
+          paygate_tx_reference?: string | null;
           account_number?: string | null;
           network?: string | null;
           description?: string | null;
@@ -449,7 +449,7 @@ export interface Database {
           status: 'pending' | 'approved' | 'paid' | 'rejected';
           admin_comment: string | null;
           reviewed_by: string | null;
-          feexpay_reference: string | null;
+          paygate_tx_reference: string | null;
           network: string | null;
           description: string | null;
           created_at: string;
@@ -464,7 +464,7 @@ export interface Database {
           status?: 'pending' | 'approved' | 'paid' | 'rejected';
           admin_comment?: string | null;
           reviewed_by?: string | null;
-          feexpay_reference?: string | null;
+          paygate_tx_reference?: string | null;
           network?: string | null;
           description?: string | null;
           created_at?: string;
@@ -479,7 +479,7 @@ export interface Database {
           status?: 'pending' | 'approved' | 'paid' | 'rejected';
           admin_comment?: string | null;
           reviewed_by?: string | null;
-          feexpay_reference?: string | null;
+          paygate_tx_reference?: string | null;
           network?: string | null;
           description?: string | null;
           created_at?: string;
@@ -847,6 +847,21 @@ export interface Database {
       };
       get_withdrawable_amount: {
         Args: { p_user_id: string };
+        Returns: Json;
+      };
+      // PayGateGlobal (FLOOZ / TMONEY) — réservées au service_role
+      credit_paygate_deposit: {
+        Args: { p_reference: string };
+        Returns: Json;
+      };
+      request_withdrawal_paygate: {
+        Args: {
+          p_user_id: string;
+          p_amount: number;
+          p_method: string;
+          p_account_info: string;
+          p_description?: string | null;
+        };
         Returns: Json;
       };
     };
