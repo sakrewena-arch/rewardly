@@ -22,9 +22,14 @@ export async function proxy(request: NextRequest) {
   const isAdminPage = pathname.startsWith("/admin");
   const isMaintenancePage = pathname.startsWith("/maintenance");
   const isOfflinePage = pathname.startsWith("/offline");
+  // 🚫 Les routes /api (dépôts & retraits PayGateGlobal, webhook de
+  //    confirmation, login admin, push…) ne doivent JAMAIS être redirigées :
+  //    un 307 vers /maintenance casserait les paiements et empêcherait
+  //    PayGateGlobal de nous notifier. Elles gèrent elles-mêmes leur sécurité.
+  const isApiRoute = pathname.startsWith("/api");
   const isStaticFile = pathname.startsWith("/_next") || pathname.startsWith("/images") || /\.(svg|png|jpg|jpeg|gif|webp|jfif)$/.test(pathname);
 
-  if (!isAdminPage && !isMaintenancePage && !isOfflinePage && !isStaticFile) {
+  if (!isAdminPage && !isMaintenancePage && !isOfflinePage && !isStaticFile && !isApiRoute) {
     try {
       // Vérifier le mode maintenance (fetch direct vers Supabase REST)
       const maintenanceResponse = await fetch(
@@ -94,9 +99,11 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Matcher toutes les pages web (nécessaire pour le mode maintenance),
-     * mais ignorer les fichiers statiques et assets.
+     * Matcher les pages web (nécessaire pour le mode maintenance),
+     * mais IGNORER :
+     *   - /api/** (paiements PayGateGlobal, webhook, login admin, push…)
+     *   - les fichiers statiques et assets
      */
-    "/((?!_next/static|_next/image|favicon.ico|images|.*\\.(?:svg|png|jpg|jpeg|gif|webp|jfif)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|images|.*\\.(?:svg|png|jpg|jpeg|gif|webp|jfif)$).*)",
   ],
 };
